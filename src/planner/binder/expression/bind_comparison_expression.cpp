@@ -96,6 +96,15 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		result_type = LogicalType::BLOB;
 		return true;
 	}
+	if ((left_type.id() == LogicalTypeId::BIT &&
+	     (right_type.IsNumeric() || right_type.id() == LogicalTypeId::INTEGER_LITERAL ||
+	      right_type.id() == LogicalTypeId::BLOB || right_type.id() == LogicalTypeId::BLOB_LITERAL)) ||
+	    (right_type.id() == LogicalTypeId::BIT &&
+	     (left_type.IsNumeric() || left_type.id() == LogicalTypeId::INTEGER_LITERAL ||
+	      left_type.id() == LogicalTypeId::BLOB || left_type.id() == LogicalTypeId::BLOB_LITERAL))) {
+		result_type = LogicalType::HUGEINT;
+		return true;
+	}
 	if (is_equality) {
 		res = LogicalType::ForceMaxLogicalType(left_type, right_type);
 	} else {
@@ -252,8 +261,18 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	}
 
 	// add casts (if necessary)
+	// In MySQL, Comparing BLOB_LITERAL and BIT requires first converting to BIT type, and then to HUGEINT type.
+	// BLOB_LITERAL -> HUGEINT: BLOB_LITERAL -> BIT ->HUGEINT
+	if (left_sql_type.id() == LogicalTypeId::BLOB_LITERAL && input_type.id() == LogicalTypeId::HUGEINT) {
+		left = BoundCastExpression::AddCastToType(context, std::move(left), LogicalType(LogicalTypeId::BIT),
+		                                          input_type.id() == LogicalTypeId::ENUM);
+	}
 	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,
 	                                          input_type.id() == LogicalTypeId::ENUM);
+	if (right_sql_type.id() == LogicalTypeId::BLOB_LITERAL && input_type.id() == LogicalTypeId::HUGEINT) {
+		right = BoundCastExpression::AddCastToType(context, std::move(right), LogicalType(LogicalTypeId::BIT),
+		                                          input_type.id() == LogicalTypeId::ENUM);
+	}
 	right = BoundCastExpression::AddCastToType(context, std::move(right), input_type,
 	                                           input_type.id() == LogicalTypeId::ENUM);
 

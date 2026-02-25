@@ -347,6 +347,18 @@ static int64_t ImplicitCastVarchar(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastBit(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::UBIGINT:
+		return 101;
+	case LogicalTypeId::BLOB:
+		return 102;
+	case LogicalTypeId::BOOLEAN:
+		return 103;
+	default:
+		return -1;
+	}
+}
 
 bool LogicalTypeIsValid(const LogicalType &type) {
 	switch (type.id()) {
@@ -661,6 +673,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	// unequal comparison between timestamp_tz and varchar
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return ImplicitCastTimestamptz(to);
+	case LogicalTypeId::BIT:
+		return ImplicitCastBit(to);
 	default:
 		return -1;
 	}
