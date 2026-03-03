@@ -289,9 +289,10 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 
 	// In MySQL, whether it is case sensitive depends on the collation of the first child
 	if (function.name == "position" || function.name == "instr") {
-		auto target_type = (children[0]->return_type.id() == LogicalTypeId::VARCHAR
-								|| children[0]->return_type.id() == LogicalTypeId::STRING_LITERAL) ?
-								children[0]->return_type : function.arguments[0];
+		auto target_type = (children[0]->return_type.id() == LogicalTypeId::VARCHAR ||
+		                    children[0]->return_type.id() == LogicalTypeId::STRING_LITERAL)
+		                       ? children[0]->return_type
+		                       : function.arguments[0];
 		if (target_type.AuxInfo()) {
 			auto type_info = target_type.GetAuxInfoShrPtr()->Cast<StringTypeInfo>();
 			if (StringUtil::Lower(type_info.collation).find("nocase") != std::string::npos) {
@@ -314,6 +315,62 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 			auto cast_result = RequiresCast(children[2]->return_type, target_type);
 			if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
 				children[2] = BoundCastExpression::AddCastToType(context, std::move(children[2]), target_type);
+			}
+		}
+		return;
+	}
+
+	if (function.name == "find_in_set") {
+		LogicalType target_type;
+		auto child_type_0 = (children[0]->return_type.id() == LogicalTypeId::VARCHAR ||
+		                     children[0]->return_type.id() == LogicalTypeId::STRING_LITERAL)
+		                        ? children[0]->return_type
+		                        : function.arguments[0];
+		auto child_type_1 = (children[1]->return_type.id() == LogicalTypeId::VARCHAR ||
+		                     children[1]->return_type.id() == LogicalTypeId::STRING_LITERAL)
+		                        ? children[1]->return_type
+		                        : function.arguments[0];
+		if (child_type_0.AuxInfo() || !child_type_1.AuxInfo()) {
+			target_type = child_type_0;
+		} else if (child_type_1.AuxInfo()) {
+			target_type = child_type_1;
+		}
+		target_type.Verify();
+
+		for (idx_t i = 0; i < children.size(); i++) {
+			auto type = children[i]->return_type;
+			if (type.id() == LogicalTypeId::VARCHAR && !type.HasAlias()) {
+				children[i]->return_type = target_type;
+			}
+			// now push the actual collation handling
+			ExpressionBinder::PushCollation(context, children[i], children[i]->return_type,
+			                                CollationType::COMBINABLE_COLLATIONS);
+			auto cast_result = RequiresCast(children[i]->return_type, target_type);
+			if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+				children[i] = BoundCastExpression::AddCastToType(context, std::move(children[i]), target_type);
+			}
+		}
+		return;
+	}
+
+	if (function.name == "field") {
+		auto target_type = (children[0]->return_type.id() == LogicalTypeId::VARCHAR ||
+		                    children[0]->return_type.id() == LogicalTypeId::STRING_LITERAL)
+		                       ? children[0]->return_type
+		                       : function.arguments[0];
+		target_type.Verify();
+
+		for (idx_t i = 0; i < children.size(); i++) {
+			auto type = children[i]->return_type;
+			if (type.id() == LogicalTypeId::VARCHAR && !type.HasAlias()) {
+				children[i]->return_type = target_type;
+			}
+			// now push the actual collation handling
+			ExpressionBinder::PushCollation(context, children[i], children[i]->return_type,
+			                                CollationType::COMBINABLE_COLLATIONS);
+			auto cast_result = RequiresCast(children[i]->return_type, target_type);
+			if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+				children[i] = BoundCastExpression::AddCastToType(context, std::move(children[i]), target_type);
 			}
 		}
 		return;

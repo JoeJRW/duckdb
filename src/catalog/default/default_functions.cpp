@@ -199,7 +199,6 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "from_unixtime", {"sec", "format", nullptr}, {{nullptr, nullptr}}, "strftime(make_timestamptz(cast(cast(sec as double) * 1000000 as bigint)), format)"},
 
 	// mysql string function
-	{DEFAULT_SCHEMA, "find_in_set", {"str", "strlist", nullptr}, {{nullptr, nullptr}}, "ifnull((select n from (select row_number() over () as n, unnest from unnest(split(strlist, ',')))d where d.unnest = str), 0)"},
 	{DEFAULT_SCHEMA, "locate", {"substr", "str", nullptr}, {{nullptr, nullptr}}, "position(substr IN str)"},
 	{DEFAULT_SCHEMA, "locate", {"substr", "str", "pos", nullptr}, {{nullptr, nullptr}}, "position(substr IN str[pos:]) + if(position(substr IN str[pos:]), pos - 1, 0)"},
 	{DEFAULT_SCHEMA, "strcmp", {"expr1", "expr2", nullptr}, {{nullptr, nullptr}}, "if(expr1 is null or expr2 is null, null, if(cast(expr1 as char) >= cast(expr2 as char), if(cast(expr1 as char) = cast(expr2 as char), 0, 1), -1))"},

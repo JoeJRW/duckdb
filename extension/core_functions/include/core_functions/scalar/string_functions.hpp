@@ -87,6 +87,26 @@ struct DamerauLevenshteinFun {
 	static ScalarFunction GetFunction();
 };
 
+struct FindInSetFun {
+	static constexpr const char *Name = "find_in_set";
+	static constexpr const char *Parameters = "str, strlist";
+	static constexpr const char *Description = "Returns a value in the range of 1 to N if the string str is in the string list strlist consisting of N substrings.";
+	static constexpr const char *Example = "find_in_set('b','a,b,c,d')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct FieldFun {
+	static constexpr const char *Name = "field";
+	static constexpr const char *Parameters = "str, str1, str2, ...";
+	static constexpr const char *Description = "Returns the index (position) of str in the str1, str2, str3, ... list. Returns 0 if str is not found.";
+	static constexpr const char *Example = "field('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff');";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct FormatFun {
 	static constexpr const char *Name = "format";
 	static constexpr const char *Parameters = "format,parameters...";

@@ -62,6 +62,20 @@
         "type": "scalar_function"
     },
     {
+        "name": "find_in_set",
+        "parameters": "str, strlist",
+        "description": "Returns a value in the range of 1 to N if the string str is in the string list strlist consisting of N substrings.",
+        "example": "find_in_set('b','a,b,c,d')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "field",
+        "parameters": "str, str1, str2, ...",
+        "description": "Returns the index (position) of str in the str1, str2, str3, ... list. Returns 0 if str is not found.",
+        "example": "field('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff');",
+        "type": "scalar_function_set"
+    },
+    {
         "name": "format",
         "parameters": "format,parameters...",
         "description": "Formats a string using the fmt syntax.",
