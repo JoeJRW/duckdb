@@ -6,6 +6,7 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar/map_functions.hpp"
+#include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar/sequence_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -53,6 +54,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUintegerFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUsmallintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUtinyintFun),
+	DUCKDB_SCALAR_FUNCTION(InternalCompressStringHugeintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUbigintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUhugeintFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressStringUintegerFun),
@@ -145,7 +147,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpExtractAllFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpFun),
 	DUCKDB_SCALAR_FUNCTION_SET(RegexpMatchesFun),
-	DUCKDB_SCALAR_FUNCTION_SET(RegexpReplaceFun),
+	DUCKDB_SCALAR_FUNCTION_SET(RegexpReplaceDuckdbFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(RegexpSplitToArrayFun),
 	DUCKDB_SCALAR_FUNCTION(RemapStructFun),
 	DUCKDB_SCALAR_FUNCTION(RowFun),
@@ -162,9 +164,13 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(StripAccentsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION(StructConcatFun),
+	DUCKDB_SCALAR_FUNCTION(StructContainsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(StructExtractFun),
 	DUCKDB_SCALAR_FUNCTION(StructExtractAtFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StructHasFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(StructIndexofFun),
 	DUCKDB_SCALAR_FUNCTION(StructPackFun),
+	DUCKDB_SCALAR_FUNCTION(StructPositionFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(SubstrFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringFun),
 	DUCKDB_SCALAR_FUNCTION_SET(SubstringGraphemeFun),
@@ -174,6 +180,8 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(TryStrpTimeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(UcaseFun),
 	DUCKDB_SCALAR_FUNCTION(UpperFun),
+	DUCKDB_SCALAR_FUNCTION_SET(VariantExtractFun),
+	DUCKDB_SCALAR_FUNCTION(VariantTypeofFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WriteLogFun),
 	DUCKDB_SCALAR_FUNCTION(ConcatOperatorFun),
 	DUCKDB_SCALAR_FUNCTION(LikeFun),

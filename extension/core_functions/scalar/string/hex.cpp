@@ -557,7 +557,7 @@ ScalarFunctionSet HexFun::GetFunctions() {
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
-	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
+	    ScalarFunction({LogicalType::BIGNUM}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
 	    ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, ToHexFunction<string_t, HexStrOperator>));
 	to_hex.AddFunction(
@@ -589,7 +589,7 @@ ScalarFunctionSet BinFun::GetFunctions() {
 	to_binary.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
 	to_binary.AddFunction(
-	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
+	    ScalarFunction({LogicalType::BIGNUM}, LogicalType::VARCHAR, ToBinaryFunction<string_t, BinaryStrOperator>));
 	to_binary.AddFunction(ScalarFunction({LogicalType::UBIGINT}, LogicalType::VARCHAR,
 	                                     ToBinaryFunction<uint64_t, BinaryIntegralOperator>));
 	to_binary.AddFunction(
@@ -616,8 +616,8 @@ ScalarFunctionSet OctFun::GetFunctions() {
 	// In MySQL, varchar will be implicitly converted to Double in oct().
 	to_oct.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, ToOctFunction<string_t, OctStrOperator>));
-	to_oct.AddFunction(
-	    ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToOctFunction<string_t, OctStrOperator>));
+	// to_oct.AddFunction(
+	//     ScalarFunction({LogicalType::VARINT}, LogicalType::VARCHAR, ToOctFunction<string_t, OctStrOperator>));
 	to_oct.AddFunction(
 	    ScalarFunction({LogicalType::BLOB}, LogicalType::VARCHAR, ToOctFunction<string_t, OctStrOperator>));
 	to_oct.AddFunction(
