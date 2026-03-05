@@ -68,7 +68,11 @@ ExceptionFormatValue
 ExceptionFormatValue::CreateFormatValue(SQLIdentifier value) { // NOLINT: templating requires us to copy value here
 	return KeywordHelper::WriteOptionallyQuoted(value.raw_string, '"');
 }
-
+template <>
+ExceptionFormatValue
+ExceptionFormatValue::CreateFormatValue(MySQLCatalogIdentifier value) { // NOLINT: templating requires us to copy value here
+	return KeywordHelper::WriteOptionallyQuoted(value.raw_string, '`');
+}
 template <>
 ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) {
 	return ExceptionFormatValue(string(value));
