@@ -217,7 +217,7 @@ void ArrayGroupConcatScatterUpdate(Vector inputs[], AggregateInputData &aggr_inp
 				all_valid = false;
 				break;
 			}
-			str_size += data[j][i].GetSize();
+			str_size += data[j][idx].GetSize();
 			idxes[j] = idx;
 			sizes[j] = data[j][idx].GetSize();
 		}
