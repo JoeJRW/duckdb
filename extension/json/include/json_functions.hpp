@@ -111,6 +111,7 @@ private:
 
 	// MySQL
 	static ScalarFunctionSet GetLengthFunction();
+	static ScalarFunctionSet GetMemberOfFunction();
 
 	static PragmaFunctionSet GetExecuteJsonSerializedSqlPragmaFunction();
 

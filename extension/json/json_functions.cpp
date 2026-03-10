@@ -182,6 +182,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 
 	// MySQL
 	functions.push_back(GetLengthFunction());
+	functions.push_back(GetMemberOfFunction());
 
 	return functions;
 }
