@@ -306,7 +306,9 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
                                                     vector<unique_ptr<Expression>> &arguments, bool is_operator) {
 	bool list_concat = false;
 	// blob concat is only supported for the concat operator - regular concat converts to varchar
-	bool all_blob = is_operator ? true : false;
+	// bool all_blob = is_operator ? true : false;
+	// In MySQL, if one of the columns is of type blob, then the return value is also of type blob.
+	bool any_blob = false;
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
@@ -314,14 +316,17 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 		if (arg->return_type.id() == LogicalTypeId::LIST || arg->return_type.id() == LogicalTypeId::ARRAY) {
 			list_concat = true;
 		}
-		if (arg->return_type.id() != LogicalTypeId::BLOB) {
-			all_blob = false;
+		// if (arg->return_type.id() != LogicalTypeId::BLOB) {
+		// 	all_blob = false;
+		// }
+		if (arg->return_type.id() == LogicalTypeId::BLOB) {
+			any_blob = true;
 		}
 	}
 	if (list_concat) {
 		return BindListConcat(context, bound_function, arguments, is_operator);
 	}
-	auto return_type = all_blob ? LogicalType::BLOB : LogicalType::VARCHAR;
+	auto return_type = any_blob ? LogicalType::BLOB : LogicalType::VARCHAR;
 
 	// we can now assume that the input is a string or castable to a string
 	SetArgumentType(bound_function, return_type, is_operator);
