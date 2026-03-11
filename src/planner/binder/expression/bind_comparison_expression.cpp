@@ -151,7 +151,7 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 			auto left_collation = StringType::GetCollation(left_type);
 			auto right_collation = StringType::GetCollation(right_type);
 			if (!left_collation.empty() && !right_collation.empty() && left_collation != right_collation &&
-			    !ClientConfig::GetConfig(context).GetSetting<ForceNoCollationSetting>(context)) {
+			    !ClientConfig::GetConfig(context).force_no_collation) {
 				throw BinderException("Cannot combine types with different collation!");
 			}
 		}

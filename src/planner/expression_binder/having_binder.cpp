@@ -72,7 +72,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	}
 
 	if (aggregate_handling != AggregateHandling::FORCE_AGGREGATES) {
-		bool only_full_group_by = (ClientConfig::GetConfig(context).GetSetting<SqlModeSetting>(context) &
+		bool only_full_group_by = (ClientConfig::GetConfig(context).sql_mode &
 		                           1ULL << static_cast<uint8_t>(SqlModeType::MODE_ONLY_FULL_GROUP_BY));
 		if (!only_full_group_by) {
 			vector<unique_ptr<ParsedExpression>> func_children;

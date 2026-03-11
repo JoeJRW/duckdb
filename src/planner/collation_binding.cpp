@@ -15,7 +15,7 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 		// only VARCHAR columns require collation
 		return false;
 	}
-	if (ClientConfig::GetConfig(context).GetSetting<ForceNoCollationSetting>(context)) {
+	if (ClientConfig::GetConfig(context).force_no_collation) {
 		return false;
 	}
 	// replace default collation with system collation

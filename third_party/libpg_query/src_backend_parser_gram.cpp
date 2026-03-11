@@ -34752,7 +34752,7 @@ makeBoolAConst(bool state, int location)
 	PGAConst *n = makeNode(PGAConst);
 
 	n->val.type = T_PGString;
-	n->val.val.str = (state ? (char*) "t" : (char*) "f");
+	n->val.val.str = (state ? (char*) "1" : (char*) "0");
 	n->location = location;
 
 	return makeTypeCast((PGNode *)n, SystemTypeName("bool"), 0, -1);
