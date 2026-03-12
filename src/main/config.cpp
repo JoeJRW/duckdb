@@ -183,12 +183,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(QueryMaxThreadsSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 84),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 85),
                                                      DUCKDB_SETTING_ALIAS("null_order", 34),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 103),
-                                                     DUCKDB_SETTING_ALIAS("user", 117),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 105),
+                                                     DUCKDB_SETTING_ALIAS("user", 120),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 20),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 116),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 119),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
