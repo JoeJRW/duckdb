@@ -704,7 +704,7 @@
         "description": "Allow ordering by non-integer literals - ordering by such literals has no effect.",
         "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "true"
+        "default_value": "1"
     },
     {
         "name": "ordered_aggregate_threshold",

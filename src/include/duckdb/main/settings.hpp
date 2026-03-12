@@ -395,7 +395,7 @@ struct DefaultNullOrderSetting {
 	static constexpr const char *Name = "default_null_order";
 	static constexpr const char *Description = "NULL ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
 	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "NULLS_LAST";
+	static constexpr const char *DefaultValue = "NULLS_FIRST_ON_ASC_LAST_ON_DESC";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
@@ -789,7 +789,7 @@ struct IeeeFloatingPointOpsSetting {
 	static constexpr const char *Description =
 	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
+	static constexpr const char *DefaultValue = "false";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
@@ -984,7 +984,8 @@ struct OrderByNonIntegerLiteralSetting {
 	static constexpr const char *Description =
 	    "Allow ordering by non-integer literals - ordering by such literals has no effect.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	// TODO: how about other boolean Settings
+	static constexpr const char *DefaultValue = "1";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
