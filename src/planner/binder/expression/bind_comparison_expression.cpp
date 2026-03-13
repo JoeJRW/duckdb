@@ -98,10 +98,12 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 	}
 	if ((left_type.id() == LogicalTypeId::BIT &&
 	     (right_type.IsNumeric() || right_type.id() == LogicalTypeId::INTEGER_LITERAL ||
-	      right_type.id() == LogicalTypeId::BLOB || right_type.id() == LogicalTypeId::BLOB_LITERAL)) ||
+	      right_type.id() == LogicalTypeId::BLOB || right_type.id() == LogicalTypeId::BLOB_LITERAL ||
+	      right_type.id() == LogicalTypeId::BOOLEAN)) ||
 	    (right_type.id() == LogicalTypeId::BIT &&
 	     (left_type.IsNumeric() || left_type.id() == LogicalTypeId::INTEGER_LITERAL ||
-	      left_type.id() == LogicalTypeId::BLOB || left_type.id() == LogicalTypeId::BLOB_LITERAL))) {
+	      left_type.id() == LogicalTypeId::BLOB || left_type.id() == LogicalTypeId::BLOB_LITERAL ||
+	      left_type.id() == LogicalTypeId::BOOLEAN))) {
 		result_type = LogicalType::HUGEINT;
 		return true;
 	}

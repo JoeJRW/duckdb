@@ -1524,7 +1524,7 @@ bool CastFromBitToNumeric::Operation(string_t input, bool &result, CastParameter
 
 	uint64_t value;
 	bool success = CastFromBitToNumeric::Operation(input, value, parameters);
-	result = (value == 1);
+	result = (value > 0);
 	return (success);
 }
 
