@@ -90,7 +90,7 @@ struct AllowExtensionsMetadataMismatchSetting {
 	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
 	static constexpr const char *Description = "Allow to load extensions with not compatible metadata";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -157,7 +157,7 @@ struct ArrowLargeBufferSizeSetting {
 	static constexpr const char *Description =
 	    "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -168,7 +168,7 @@ struct ArrowLosslessConversionSetting {
 	    "Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types "
 	    "with a duckdb.type_name extension name.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -178,7 +178,7 @@ struct ArrowOutputListViewSetting {
 	static constexpr const char *Description =
 	    "Whether export to Arrow format should use ListView as the physical layout for LIST columns";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -292,7 +292,7 @@ struct DebugAsofIejoinSetting {
 	static constexpr const char *Name = "debug_asof_iejoin";
 	static constexpr const char *Description = "DEBUG SETTING: force use of IEJoin to implement AsOf joins";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
@@ -324,7 +324,7 @@ struct DebugForceNoCrossProductSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
@@ -333,7 +333,7 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr const char *Name = "debug_skip_checkpoint_on_commit";
 	static constexpr const char *Description = "DEBUG SETTING: skip checkpointing on commit";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -342,7 +342,7 @@ struct DebugVerifyBlocksSetting {
 	static constexpr const char *Name = "debug_verify_blocks";
 	static constexpr const char *Description = "DEBUG SETTING: verify block metadata during checkpointing";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -439,7 +439,7 @@ struct DisableTimestamptzCastsSetting {
 	static constexpr const char *Name = "disable_timestamptz_casts";
 	static constexpr const char *Description = "Disable casting from timestamp to timestamptz ";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
@@ -533,7 +533,7 @@ struct EnableFSSTVectorsSetting {
 	static constexpr const char *Description =
 	    "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -573,7 +573,7 @@ struct EnableMacroDependenciesSetting {
 	static constexpr const char *Description =
 	    "Enable created MACROs to create dependencies on the referenced objects (such as tables)";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -582,7 +582,7 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *Name = "enable_object_cache";
 	static constexpr const char *Description = "[PLACEHOLDER] Legacy setting - does nothing";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -627,7 +627,7 @@ struct EnableViewDependenciesSetting {
 	static constexpr const char *Description =
 	    "Enable created VIEWs to create dependencies on the referenced objects (such as tables)";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -656,7 +656,7 @@ struct ExperimentalMetadataReuseSetting {
 	static constexpr const char *Name = "experimental_metadata_reuse";
 	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -789,7 +789,7 @@ struct IeeeFloatingPointOpsSetting {
 	static constexpr const char *Description =
 	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
@@ -799,7 +799,7 @@ struct ImmediateTransactionModeSetting {
 	static constexpr const char *Description =
 	    "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -832,7 +832,7 @@ struct IntegerDivisionSetting {
 	static constexpr const char *Description =
 	    "Whether or not the / operator defaults to integer division, or to floating point division";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
@@ -974,7 +974,7 @@ struct OldImplicitCastingSetting {
 	static constexpr const char *Name = "old_implicit_casting";
 	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -984,7 +984,6 @@ struct OrderByNonIntegerLiteralSetting {
 	static constexpr const char *Description =
 	    "Allow ordering by non-integer literals - ordering by such literals has no effect.";
 	static constexpr const char *InputType = "BOOLEAN";
-	// TODO: how about other boolean Settings
 	static constexpr const char *DefaultValue = "1";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
@@ -1084,7 +1083,7 @@ struct PreferRangeJoinsSetting {
 	static constexpr const char *Name = "prefer_range_joins";
 	static constexpr const char *Description = "Force use of range joins with mixed predicates";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
@@ -1094,7 +1093,7 @@ struct PreserveIdentifierCaseSetting {
 	static constexpr const char *Description =
 	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
+	static constexpr const char *DefaultValue = "1";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
@@ -1105,7 +1104,7 @@ struct PreserveInsertionOrderSetting {
 	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
 	    "that do not contain ORDER BY clauses.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
+	static constexpr const char *DefaultValue = "1";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -1115,7 +1114,7 @@ struct ProduceArrowStringViewSetting {
 	static constexpr const char *Description =
 	    "Whether Arrow strings should be produced by DuckDB in Utf8View format instead of Utf8";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
+	static constexpr const char *DefaultValue = "0";
 	static constexpr SetScope DefaultScope = SetScope::GLOBAL;
 };
 
@@ -1167,7 +1166,7 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	static constexpr const char *Description =
 	    "When a scalar subquery returns multiple rows - return a random row instead of returning an error.";
 	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
+	static constexpr const char *DefaultValue = "1";
 	static constexpr SetScope DefaultScope = SetScope::SESSION;
 };
 
