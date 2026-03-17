@@ -17,6 +17,7 @@ add_library_unity(
   duckdb_main
   OBJECT
   appender.cpp
+  physical_appender.cpp
   attached_database.cpp
   client_config.cpp
   client_context_file_opener.cpp
