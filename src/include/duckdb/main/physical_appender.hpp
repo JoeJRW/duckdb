@@ -27,9 +27,10 @@ class ColumnDataCollection;
 class PhysicalAppender : public BaseAppender {
 public:
 	DUCKDB_API PhysicalAppender(Connection &con, const string &database_name, const string &schema_name,
-	                            const string &table_name);
-	DUCKDB_API PhysicalAppender(Connection &con, const string &schema_name, const string &table_name);
-	DUCKDB_API PhysicalAppender(Connection &con, const string &table_name);
+	                            const string &table_name, AppenderType appender_type);
+	DUCKDB_API PhysicalAppender(Connection &con, const string &schema_name, const string &table_name,
+	                            AppenderType appender_type);
+	DUCKDB_API PhysicalAppender(Connection &con, const string &table_name, AppenderType appender_type);
 	DUCKDB_API ~PhysicalAppender() override;
 
 public:

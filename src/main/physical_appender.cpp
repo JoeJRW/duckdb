@@ -20,8 +20,8 @@ namespace duckdb {
 // Physical Appender
 //===--------------------------------------------------------------------===//
 PhysicalAppender::PhysicalAppender(Connection &con, const string &database_name, const string &schema_name,
-                                   const string &table_name)
-    : BaseAppender(Allocator::DefaultAllocator(), AppenderType::PHYSICAL), context(con.context) {
+                                   const string &table_name, AppenderType appender_type)
+    : BaseAppender(Allocator::DefaultAllocator(), appender_type), context(con.context) {
 
 	auto &config = DBConfig::GetConfig(*con.context);
 	flush_memory_threshold = config.options.appender_allocator_flush_threshold;
@@ -78,12 +78,13 @@ PhysicalAppender::PhysicalAppender(Connection &con, const string &database_name,
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
 
-PhysicalAppender::PhysicalAppender(Connection &con, const string &schema_name, const string &table_name)
-    : PhysicalAppender(con, INVALID_CATALOG, schema_name, table_name) {
+PhysicalAppender::PhysicalAppender(Connection &con, const string &schema_name, const string &table_name,
+                                   AppenderType appender_type)
+    : PhysicalAppender(con, INVALID_CATALOG, schema_name, table_name, AppenderType::PHYSICAL) {
 }
 
-PhysicalAppender::PhysicalAppender(Connection &con, const string &table_name)
-    : PhysicalAppender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name) {
+PhysicalAppender::PhysicalAppender(Connection &con, const string &table_name, AppenderType appender_type)
+    : PhysicalAppender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name, AppenderType::PHYSICAL) {
 }
 
 PhysicalAppender::~PhysicalAppender() {
