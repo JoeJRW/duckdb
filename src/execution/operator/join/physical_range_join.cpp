@@ -128,8 +128,7 @@ public:
 
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
-		auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
-		num_threads = MinValue<idx_t>(num_threads, ClientConfig::GetConfig(context).max_threads_per_query);
+		auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads(context));
 
 		vector<shared_ptr<Task>> iejoin_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {

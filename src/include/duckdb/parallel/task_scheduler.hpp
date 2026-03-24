@@ -68,6 +68,8 @@ public:
 
 	//! Returns the number of threads
 	DUCKDB_API int32_t NumberOfThreads();
+	//! Returns the number of threads, no bigger than max_threads_per_query
+	DUCKDB_API int32_t NumberOfThreads(const ClientContext &context);
 
 	idx_t GetNumberOfTasks() const;
 	idx_t GetProducerCount() const;

@@ -570,7 +570,7 @@ void HashedSortMaterializeEvent::Schedule() {
 
 	// Schedule as many tasks per hash group as the sort will allow
 	auto &ts = TaskScheduler::GetScheduler(client);
-	const auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
+	const auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads(client));
 	auto &sort = *gstate.hashed_sort.sort;
 
 	vector<shared_ptr<Task>> merge_tasks;

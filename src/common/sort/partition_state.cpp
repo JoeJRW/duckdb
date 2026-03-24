@@ -402,7 +402,7 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
                                                      hash_t hash_bin)
     : sink(sink), group_data(std::move(group_data_p)), group_idx(sink.hash_groups.size()),
       memory_per_thread(sink.memory_per_thread),
-      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
+      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads(sink.context))),
       stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.context, sink.partitions, sink.orders, sink.payload_types,
@@ -423,7 +423,7 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink)
     : sink(sink), group_idx(0), memory_per_thread(sink.memory_per_thread),
-      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
+      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads(sink.context))),
       stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	const hash_t hash_bin = 0;
@@ -659,7 +659,7 @@ void PartitionMergeEvent::Schedule() {
 
 	// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 	auto &ts = TaskScheduler::GetScheduler(context);
-	auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
+	auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads(context));
 
 	vector<shared_ptr<Task>> merge_tasks;
 	for (idx_t tnum = 0; tnum < num_threads; tnum++) {

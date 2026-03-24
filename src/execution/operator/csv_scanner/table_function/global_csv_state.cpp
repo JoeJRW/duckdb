@@ -13,8 +13,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const CSVReaderOptions 
                                const MultiFileBindData &bind_data)
     : context(context_p), bind_data(bind_data), sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 	// There are situations where we only support single threaded scanning
-	auto system_threads = context.db->NumberOfThreads();
-	system_threads = MinValue<idx_t>(system_threads, ClientConfig::GetConfig(context).max_threads_per_query);
+	auto system_threads = context.db->NumberOfThreads(context);
 	bool many_csv_files = total_file_count > 1 && total_file_count > system_threads * 2;
 	single_threaded = many_csv_files || !options.parallel;
 	scanner_idx = 0;

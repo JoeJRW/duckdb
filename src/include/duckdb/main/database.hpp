@@ -61,7 +61,7 @@ public:
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
 
 	idx_t NumberOfThreads();
-
+	idx_t NumberOfThreads(const ClientContext &context);
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 

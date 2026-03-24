@@ -135,8 +135,7 @@ class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
 	    : context(context_p), op(op_p),
-	      num_threads(MinValue<idx_t>(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-	                                  ClientConfig::GetConfig(context).max_threads_per_query)),
+	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads(context))),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
 	      active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0),
 	      probe_side_requirement(0), scanned_data(false) {

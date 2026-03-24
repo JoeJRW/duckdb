@@ -489,6 +489,10 @@ idx_t DatabaseInstance::NumberOfThreads() {
 	return NumericCast<idx_t>(scheduler->NumberOfThreads());
 }
 
+idx_t DatabaseInstance::NumberOfThreads(const ClientContext &context) {
+	return NumericCast<idx_t>(scheduler->NumberOfThreads(context));	
+}
+
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }

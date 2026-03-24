@@ -295,10 +295,8 @@ public:
 public:
 	void Schedule() override {
 		vector<shared_ptr<Task>> tasks;
-		idx_t max_threads_per_query = ClientConfig::GetConfig(context).max_threads_per_query;
-		for (idx_t i = 0;
-		     i < MinValue<idx_t>(idx_t(TaskScheduler::GetScheduler(context).NumberOfThreads()), max_threads_per_query);
-		     i++) {
+		auto num_threads = idx_t(TaskScheduler::GetScheduler(context).NumberOfThreads(context));
+		for (idx_t i = 0; i < num_threads; i++) {
 			auto process_task =
 			    make_uniq<ProcessRemainingBatchesTask>(pipeline->executor, shared_from_this(), gstate, context, op);
 			tasks.push_back(std::move(process_task));

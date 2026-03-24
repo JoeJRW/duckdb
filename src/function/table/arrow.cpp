@@ -109,7 +109,7 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
 }
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
-	return MinValue<idx_t>(context.db->NumberOfThreads(), ClientConfig::GetConfig(context).max_threads_per_query);
+	return context.db->NumberOfThreads(context);
 }
 
 bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,

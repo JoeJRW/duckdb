@@ -168,7 +168,7 @@ private:
 class SortedRunMergerGlobalState : public GlobalSourceState {
 public:
 	explicit SortedRunMergerGlobalState(ClientContext &context_p, const SortedRunMerger &merger_p)
-	    : context(context_p), num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
+	    : context(context_p), num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads(context))),
 	      merger(merger_p), num_runs(merger.sorted_runs.size()),
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
 	      iterator_state_type(GetBlockIteratorStateType(merger.external)),

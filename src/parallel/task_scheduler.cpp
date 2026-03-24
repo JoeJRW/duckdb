@@ -403,6 +403,10 @@ int32_t TaskScheduler::NumberOfThreads() {
 	return current_thread_count.load();
 }
 
+int32_t TaskScheduler::NumberOfThreads(const ClientContext &context) {
+	return MinValue<int32_t>(NumberOfThreads(), ClientConfig::GetConfig(context).max_threads_per_query);
+}
+
 idx_t TaskScheduler::GetNumberOfTasks() const {
 	return queue->GetTasksInQueue();
 }

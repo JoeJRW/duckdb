@@ -121,7 +121,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	}
 	auto max_threads = source_state->MaxThreads();
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
+	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads(executor.context));
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}

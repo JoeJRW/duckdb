@@ -57,7 +57,7 @@ bool PhysicalPlanGenerator::PreserveInsertionOrder(PhysicalOperator &plan) {
 
 bool PhysicalPlanGenerator::UseBatchIndex(ClientContext &context, PhysicalOperator &plan) {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
-	if (scheduler.NumberOfThreads() == 1) {
+	if (scheduler.NumberOfThreads(context) == 1) {
 		// batch index usage only makes sense if we are using multiple threads
 		return false;
 	}
@@ -101,8 +101,7 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 	D_ASSERT(plan);
 	bool parallel_streaming_insert = !PhysicalPlanGenerator::PreserveInsertionOrder(context, *plan);
 	bool use_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, *plan);
-	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	num_threads = MinValue<idx_t>(num_threads, ClientConfig::GetConfig(context).max_threads_per_query);
+	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads(context);
 	if (op.return_chunk) {
 		// not supported for RETURNING (yet?)
 		parallel_streaming_insert = false;
