@@ -995,7 +995,6 @@ static void GetBinaryFunctionWithDomain(DataChunk &chunk, ExpressionState &state
 //===--------------------------------------------------------------------===//
 // sqrt
 //===--------------------------------------------------------------------===//
-
 namespace {
 struct SqrtOperator {
 	template <class TA, class TR>

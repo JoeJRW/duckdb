@@ -140,12 +140,6 @@ void ExecuteMakeTimestampNs(DataChunk &input, ExpressionState &state, Vector &re
 	return;
 }
 
-// template <typename T>
-// static void ExecuteFromUnixTime(DataChunk &input, ExpressionState &state, Vector &result) {
-// 	auto func = MakeTimestampOperator::Operation<T, timestamp_t, false>;
-// 	UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(), func);
-// }
-
 } // namespace
 
 ScalarFunctionSet MakeDateFun::GetFunctions() {

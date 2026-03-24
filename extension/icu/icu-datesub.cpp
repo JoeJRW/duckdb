@@ -284,7 +284,6 @@ struct ICUCalendarDiff : public ICUDateFunc {
 
 void RegisterICUDateSubFunctions(ExtensionLoader &loader) {
 	// In MySQL, date_sub function is different from datesub function
-	// ICUCalendarSub::AddFunctions("date_sub", db);
 	// ICUCalendarSub::AddFunctions("date_sub", loader);
 	ICUCalendarSub::AddFunctions("datesub", loader);
 

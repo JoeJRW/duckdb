@@ -1275,7 +1275,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 		query += StringUtil::Format("%s.", SQLIdentifier(description.database));
 	}
 	if (!description.schema.empty()) {
-		query +=  StringUtil::Format("`%s`.", description.schema);
+		query += StringUtil::Format("`%s`.", description.schema);
 	}
 	query += StringUtil::Format("`%s`", description.table);
 	if (column_ids && !column_ids->empty()) {
