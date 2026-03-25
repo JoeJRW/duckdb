@@ -599,8 +599,8 @@ ScalarFunctionSet BinFun::GetFunctions() {
 	to_binary.AddFunction(ScalarFunction({LogicalType::UHUGEINT}, LogicalType::VARCHAR,
 	                                     ToBinaryFunction<uhugeint_t, BinaryUhugeIntOperator>));
 	// In MySQL, the bin function with double type parameter will be rounded first
-	to_binary.AddFunction(ScalarFunction({LogicalTypeId::DOUBLE}, LogicalTypeId::VARCHAR, ToBinaryFunction<double, BinaryFloatOperator>));
-	to_binary.AddFunction(ScalarFunction({LogicalTypeId::FLOAT}, LogicalTypeId::FLOAT, ToBinaryFunction<float, BinaryFloatOperator>));
+	to_binary.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::VARCHAR, ToBinaryFunction<double, BinaryFloatOperator>));
+	to_binary.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::VARCHAR, ToBinaryFunction<float, BinaryFloatOperator>));
 
 	return to_binary;
 }

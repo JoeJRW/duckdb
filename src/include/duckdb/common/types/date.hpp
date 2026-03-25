@@ -195,7 +195,7 @@ public:
 	//! In the ISO week-numbering system, it is possible for early-January dates
 	//! to be part of the 52nd or 53rd week of the previous year.
 	DUCKDB_API static void ExtractISOYearWeek(date_t date, int32_t &year, int32_t &week);
-	//! Extract the yearweek as Mysql handles it.
+	//! Extract the yearweek as MySQL handles it.
 	DUCKDB_API static void ExtractYearWeekMysql(date_t date, int32_t &year, int32_t &week, bool monday_first = false, bool iso = false);
 	DUCKDB_API static int32_t ExtractISOWeekNumber(date_t date);
 	DUCKDB_API static int32_t ExtractISOYearNumber(date_t date);
@@ -204,7 +204,7 @@ public:
 	//! and any date before the first Monday/Sunday returns week 0
 	//! This is a bit more consistent because week numbers in a year are always incrementing
 	DUCKDB_API static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
-	//! Extract the week number as Mysql handles it.
+	//! Extract the week number as MySQL handles it.
 	DUCKDB_API static int32_t ExtractWeekNumberMysql(date_t date, bool monday_first = false, bool zero_first = true, bool iso = false);
 	//! Returns the date of the monday of the current week.
 	DUCKDB_API static date_t GetMondayOfCurrentWeek(date_t date);

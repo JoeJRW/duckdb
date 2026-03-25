@@ -263,7 +263,7 @@ struct MultiStringAggFun {
 	static constexpr const char *Name = "multi_string_agg";
 	static constexpr const char *Parameters = "array,arg";
 	static constexpr const char *Description = "Concatenates the array with an optional separator.";
-	static constexpr const char *Example = "array_group_concat(A, '-')";
+	static constexpr const char *Example = "multi_string_agg(A, '-')";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();

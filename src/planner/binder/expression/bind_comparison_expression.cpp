@@ -223,7 +223,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 		input_type = LogicalTypeId::TIMESTAMP;
 	}
 
-	// Aone 66336888. The rules for comparing time and timestamp(tz) in MySQL is amguity, so we do not allow comparisons.
+	// Aone 66336888. The rules for comparing time and timestamp(tz) in MySQL is ambiguity, so we do not allow comparisons.
 	if ((left_sql_type.id() == LogicalTypeId::TIME && 
 			(right_sql_type.id() == LogicalTypeId::TIMESTAMP || right_sql_type.id() == LogicalTypeId::TIMESTAMP_TZ)) ||
 		((right_sql_type.id() == LogicalTypeId::TIME) &&

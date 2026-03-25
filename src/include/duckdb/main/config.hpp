@@ -220,7 +220,7 @@ struct DBConfigOptions {
 	//! Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
 	ThreadPinMode pin_threads = ThreadPinMode::AUTO;
 
-	//! Peak allocation threshold at which to flush the allocator when appender flushs chunk
+	//! Peak allocation threshold at which to flush the allocator when appender flushes chunk
 	idx_t appender_allocator_flush_threshold = DConstants::INVALID_INDEX;
 
 	bool operator==(const DBConfigOptions &other) const;

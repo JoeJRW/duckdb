@@ -1299,7 +1299,7 @@ struct AppenderAllocatorFlushThresholdSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "appender_allocator_flush_threshold";
 	static constexpr const char *Description =
-	    "Peak allocation threshold at which to flush the allocator when appender flushs chunk.";
+	    "Peak allocation threshold at which to flush the allocator when appender flushes chunk.";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

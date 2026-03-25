@@ -453,7 +453,7 @@ struct DatePart {
 			if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
 				return nullptr;
 			}
-
+			// TODO: rows may be filtered incorrectly, fixed further
 			int64_t min_part = std::min(
 								std::min(Operation<T, int64_t>(min, 2), Operation<T, int64_t>(min, 3)), 
 								std::min(Operation<T, int64_t>(min, 6), Operation<T, int64_t>(min, 7))
