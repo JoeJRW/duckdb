@@ -147,7 +147,7 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		} else {
 			// else: check if collations are compatible
 			auto res_collation = StringType::GetCollation(res);
-			if (strcasecmp(res_collation.c_str(), "posix") || strcasecmp(res_collation.c_str(), "binary")) {
+			if (strcasecmp(res_collation.c_str(), "posix") == 0 || strcasecmp(res_collation.c_str(), "binary") == 0) {
 				break;
 			}
 			auto left_collation = StringType::GetCollation(left_type);
