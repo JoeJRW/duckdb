@@ -168,7 +168,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				auto vindex = vdata.sel->get_index(i);
 
 				auto ivalue = input_data[vindex];
-				if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
+				if ((!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) && !input_has_null[i]) {
 					result_has_value[i] = true;
 					result_data[i] = ivalue;
 				}
