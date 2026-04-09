@@ -115,7 +115,7 @@ private:
 	unique_ptr<SelectStatement> TransformSelectStmt(duckdb_libpgquery::PGSelectStmt &select, bool is_select = true);
 	unique_ptr<SelectStatement> TransformSelectStmt(duckdb_libpgquery::PGNode &node, bool is_select = true);
 	//! Transform a Postgres T_AlterStmt node into a AlterStatement
-	unique_ptr<AlterStatement> TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt);
+	unique_ptr<SQLStatement> TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGRenameStmt node into a RenameStatement
 	unique_ptr<AlterStatement> TransformRename(duckdb_libpgquery::PGRenameStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateStmt node into a CreateStatement
