@@ -282,7 +282,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
-		if (!info->table->IsMainTable()) {
+		if (!info->table->IsMainTable() && info->table->GetAlteredByTransaction() != transaction.transaction_id) {
 			auto table_name = info->table->GetTableName();
 			auto table_modification = info->table->TableModification();
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",

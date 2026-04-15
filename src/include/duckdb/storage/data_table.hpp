@@ -218,6 +218,14 @@ public:
 	}
 	string TableModification() const;
 
+	transaction_t GetAlteredByTransaction() const {
+		return altered_by_transaction.load();
+	}
+
+	void SetAlteredByTransaction(transaction_t tid) {
+		altered_by_transaction = tid;
+	}
+
 	//! Get statistics of a physical column within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &column_id);
 
@@ -321,5 +329,9 @@ private:
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The version of the data table
 	atomic<DataTableVersion> version;
+	//! If `version == ALTERED`, the transaction id of the transaction that performed the ALTER.
+	//! Otherwise `TRANSACTION_ID_START - 1` (unset). Used to let a transaction commit its own
+	//! tuple-level modifications on a DataTable that the same transaction replaced via ALTER.
+	atomic<transaction_t> altered_by_transaction {TRANSACTION_ID_START - 1};
 };
 } // namespace duckdb

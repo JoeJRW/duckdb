@@ -78,6 +78,9 @@ DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_m
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
+	// Get the Transaction ID before acquiring the append_lock to avoid potential deadlock
+	auto transaction_id = DuckTransaction::Get(context, db).transaction_id;
+
 	// add the column definitions from this DataTable
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
@@ -98,11 +101,15 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	local_storage.AddColumn(parent, *this, new_column, default_executor);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.altered_by_transaction = transaction_id;
 	parent.version = DataTableVersion::ALTERED;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
+	// Get the Transaction ID before acquiring the append_lock to avoid potential deadlock
+	auto transaction_id = DuckTransaction::Get(context, db).transaction_id;
+
 	// prevent any new tuples from being added to the parent
 	auto &local_storage = LocalStorage::Get(context, db);
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -146,12 +153,16 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	local_storage.DropColumn(parent, *this, removed_column);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.altered_by_transaction = transaction_id;
 	parent.version = DataTableVersion::ALTERED;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint &constraint)
     : db(parent.db), info(parent.info), row_groups(parent.row_groups), version(DataTableVersion::MAIN_TABLE) {
 	// ALTER COLUMN to add a new constraint.
+
+	// Get the Transaction ID before acquiring the append_lock to avoid potential deadlock
+	auto transaction_id = DuckTransaction::Get(context, db).transaction_id;
 
 	// Bind all indexes.
 	info->BindIndexes(context);
@@ -166,12 +177,16 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, BoundConstraint 
 		VerifyNewConstraint(local_storage, parent, constraint);
 	}
 	local_storage.MoveStorage(parent, *this);
+	parent.altered_by_transaction = transaction_id;
 	parent.version = DataTableVersion::ALTERED;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
     : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
+	// Get the Transaction ID before acquiring the append_lock to avoid potential deadlock
+	auto transaction_id = DuckTransaction::Get(context, db).transaction_id;
+
 	auto &local_storage = LocalStorage::Get(context, db);
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
@@ -202,6 +217,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	local_storage.ChangeType(parent, *this, changed_idx, target_type, bound_columns, cast_expr);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.altered_by_transaction = transaction_id;
 	parent.version = DataTableVersion::ALTERED;
 }
 
