@@ -8,6 +8,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/int256.hpp"
 
 namespace duckdb {
 
@@ -303,6 +304,8 @@ CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {
 		return FixedSizeGetFunction<uint64_t>(data_type);
 	case PhysicalType::INT128:
 		return FixedSizeGetFunction<hugeint_t>(data_type);
+	case PhysicalType::INT256:
+		return FixedSizeGetFunction<int256_t>(data_type);
 	case PhysicalType::UINT128:
 		return FixedSizeGetFunction<uhugeint_t>(data_type);
 	case PhysicalType::FLOAT:

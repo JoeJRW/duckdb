@@ -1,6 +1,7 @@
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -157,7 +158,9 @@ duckdb_decimal duckdb_get_decimal(duckdb_value val) {
 	}
 	auto width = duckdb::DecimalType::GetWidth(type);
 	auto scale = duckdb::DecimalType::GetScale(type);
-	duckdb::hugeint_t hugeint = duckdb::IntegralValue::Get(v);
+	duckdb::int256_t integral = duckdb::IntegralValue::Get(v);
+	duckdb::hugeint_t hugeint;
+	duckdb::Int256::TryCast(integral, hugeint);
 	return {width, scale, {hugeint.lower, hugeint.upper}};
 }
 duckdb_value duckdb_create_float(float input) {

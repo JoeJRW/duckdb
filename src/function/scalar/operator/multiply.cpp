@@ -2,7 +2,9 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
@@ -274,6 +276,11 @@ bool TryMultiplyOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_
 	return Uhugeint::TryMultiply(left, right, result);
 }
 
+template <>
+bool TryMultiplyOperator::Operation(int256_t left, int256_t right, int256_t &result) {
+	return Int256::TryMultiply(left, right, result);
+}
+
 //===--------------------------------------------------------------------===//
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//
@@ -312,12 +319,39 @@ bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t &r
 }
 
 template <>
+bool TryDecimalMultiply::Operation(int256_t left, int256_t right, int256_t &result) {
+	if (!TryMultiplyOperator::Operation(left, right, result)) {
+		return false;
+	}
+	const int256_t &limit = Int256::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT256];
+	int256_t neg_limit;
+	if (!Int256::TryNegate(limit, neg_limit)) {
+		return false;
+	}
+	if (result <= neg_limit || result >= limit) {
+		return false;
+	}
+	return true;
+}
+
+template <>
 hugeint_t DecimalMultiplyOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
 	hugeint_t result;
 	if (!TryDecimalMultiply::Operation(left, right, result)) {
 		throw OutOfRangeException("Overflow in multiplication of DECIMAL(38) (%s * %s). You might want to add an "
 		                          "explicit cast to a decimal with a smaller scale.",
 		                          left.ToString(), right.ToString());
+	}
+	return result;
+}
+
+template <>
+int256_t DecimalMultiplyOverflowCheck::Operation(int256_t left, int256_t right) {
+	int256_t result;
+	if (!TryDecimalMultiply::Operation(left, right, result)) {
+		throw OutOfRangeException("Overflow in multiplication of DECIMAL(%d) (%s * %s). You might want to add an "
+		                          "explicit cast to a decimal with a smaller scale.",
+		                          Decimal::MAX_WIDTH_INT256, left.ToString(), right.ToString());
 	}
 	return result;
 }

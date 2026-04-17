@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -254,6 +255,9 @@ public:
 			break;
 		case PhysicalType::INT128:
 			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
+			break;
+		case PhysicalType::INT256:
+			TemplatedExecute<int256_t, OP>(left, right, result, count);
 			break;
 		case PhysicalType::UINT128:
 			TemplatedExecute<uhugeint_t, OP>(left, right, result, count);

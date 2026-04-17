@@ -12,6 +12,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -95,6 +96,7 @@ public:
 	DUCKDB_API static Value Numeric(const LogicalType &type, int64_t value);
 	DUCKDB_API static Value Numeric(const LogicalType &type, hugeint_t value);
 	DUCKDB_API static Value Numeric(const LogicalType &type, uhugeint_t value);
+	DUCKDB_API static Value Numeric(const LogicalType &type, int256_t value);
 
 	//! Create a boolean Value from a specified value
 	DUCKDB_API static Value BOOLEAN(bool value);
@@ -118,6 +120,8 @@ public:
 	DUCKDB_API static Value HUGEINT(hugeint_t value);
 	//! Create a uhugeint Value from a specified value
 	DUCKDB_API static Value UHUGEINT(uhugeint_t value);
+	//! Create an int256 Value from a specified value
+	DUCKDB_API static Value INT256(int256_t value);
 	//! Create a uuid Value from a specified value
 	DUCKDB_API static Value UUID(const string &value);
 	//! Create a uuid Value from a specified value
@@ -162,6 +166,7 @@ public:
 	DUCKDB_API static Value DECIMAL(int32_t value, uint8_t width, uint8_t scale);
 	DUCKDB_API static Value DECIMAL(int64_t value, uint8_t width, uint8_t scale);
 	DUCKDB_API static Value DECIMAL(hugeint_t value, uint8_t width, uint8_t scale);
+	DUCKDB_API static Value DECIMAL(int256_t value, uint8_t width, uint8_t scale);
 	//! Create a float Value from a specified value
 	DUCKDB_API static Value FLOAT(float value);
 	//! Create a double Value from a specified value
@@ -334,6 +339,7 @@ private:
 		uint64_t ubigint;
 		hugeint_t hugeint;
 		uhugeint_t uhugeint;
+		int256_t int256;
 		float float_;   // NOLINT
 		double double_; // NOLINT
 		uintptr_t pointer;
@@ -404,6 +410,10 @@ struct UBigIntValue {
 
 struct UhugeIntValue {
 	DUCKDB_API static uhugeint_t Get(const Value &value);
+};
+
+struct Int256Value {
+	DUCKDB_API static int256_t Get(const Value &value);
 };
 
 struct FloatValue {
@@ -479,7 +489,7 @@ struct TypeValue {
 //! Return the internal integral value for any type that is stored as an integral value internally
 //! This can be used on values of type integer, uinteger, but also date, timestamp, decimal, etc
 struct IntegralValue {
-	static hugeint_t Get(const Value &value);
+	static int256_t Get(const Value &value);
 };
 
 template <>
@@ -504,6 +514,8 @@ template <>
 Value DUCKDB_API Value::CreateValue(hugeint_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(uhugeint_t value);
+template <>
+Value DUCKDB_API Value::CreateValue(int256_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
@@ -560,6 +572,8 @@ DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
 DUCKDB_API uhugeint_t Value::GetValue() const;
 template <>
+DUCKDB_API int256_t Value::GetValue() const;
+template <>
 DUCKDB_API string Value::GetValue() const;
 template <>
 DUCKDB_API float Value::GetValue() const;
@@ -602,6 +616,8 @@ template <>
 DUCKDB_API hugeint_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API uhugeint_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API int256_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API uint8_t Value::GetValueUnsafe() const;
 template <>

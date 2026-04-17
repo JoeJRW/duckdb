@@ -5,6 +5,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/int256.hpp"
 
 #include <functional>
 
@@ -597,6 +598,8 @@ CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 		return GetRLEFunction<int64_t>(type);
 	case PhysicalType::INT128:
 		return GetRLEFunction<hugeint_t>(type);
+	case PhysicalType::INT256:
+		return GetRLEFunction<int256_t>(type);
 	case PhysicalType::UINT128:
 		return GetRLEFunction<uhugeint_t>(type);
 	case PhysicalType::UINT8:
@@ -626,6 +629,7 @@ bool RLEFun::TypeIsSupported(const PhysicalType physical_type) {
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
 	case PhysicalType::INT128:
+	case PhysicalType::INT256:
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:
 	case PhysicalType::UINT32:

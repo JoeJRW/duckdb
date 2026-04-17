@@ -13,6 +13,7 @@
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -507,6 +508,17 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, uhugeint_t>::value, T>::type Read() {
 		return ReadUhugeInt();
+	}
+
+	// Deserialize an int256_t (four uint64_t limbs)
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, int256_t>::value, T>::type Read() {
+		int256_t result;
+		result.lower = ReadUnsignedInt64();
+		result.lower_middle = ReadUnsignedInt64();
+		result.upper_middle = ReadUnsignedInt64();
+		result.upper = static_cast<int64_t>(ReadUnsignedInt64());
+		return result;
 	}
 
 	// Deserialize a LogicalIndex

@@ -1,0 +1,217 @@
+# name: test/sql/types/decimal/int256_arith.test
+# description: Arithmetic on DECIMAL(p>38,s) backed by PhysicalType::INT256.
+# group: [decimal]
+
+# ---------------------------------------------------------------------------
+# Scalar constants: +/-/*/%, negation, unary minus.
+# ---------------------------------------------------------------------------
+
+# Addition
+query I
+SELECT CAST(1.5 AS DECIMAL(50,10)) + CAST(2.5 AS DECIMAL(50,10));
+----
+4.0000000000
+
+# Subtraction
+query I
+SELECT CAST(1.5 AS DECIMAL(50,10)) - CAST(2.5 AS DECIMAL(50,10));
+----
+-1.0000000000
+
+# Multiplication (product fits in INT256 but not INT128).
+query I
+SELECT CAST('12345678901234567890' AS DECIMAL(50,0)) * CAST('10000000000' AS DECIMAL(50,0));
+----
+123456789012345678900000000000
+
+# Modulo (integer case)
+query I
+SELECT CAST(10 AS DECIMAL(50,0)) % CAST(3 AS DECIMAL(50,0));
+----
+1
+
+# Modulo (with scale)
+query I
+SELECT CAST(10 AS DECIMAL(50,2)) % CAST(3 AS DECIMAL(50,2));
+----
+1.00
+
+# Modulo (large value)
+query I
+SELECT CAST('12345678901234567890123456789012345678901234567890' AS DECIMAL(50,0)) % CAST(7 AS DECIMAL(50,0));
+----
+1
+
+# Modulo: sign follows lhs (matches DECIMAL(<=38) behavior).
+query I
+SELECT CAST(-10 AS DECIMAL(50,0)) % CAST(3 AS DECIMAL(50,0));
+----
+-1
+
+query I
+SELECT CAST(10 AS DECIMAL(50,0)) % CAST(-3 AS DECIMAL(50,0));
+----
+1
+
+# Division returns DECIMAL
+query I
+SELECT typeof(CAST(10 AS DECIMAL(50,0)) / CAST(3 AS DECIMAL(50,0)));
+----
+DECIMAL(54,4)
+
+# Unary minus
+query I
+SELECT -CAST(42 AS DECIMAL(50,10));
+----
+-42.0000000000
+
+query I
+SELECT -CAST(-42 AS DECIMAL(50,10));
+----
+42.0000000000
+
+# ---------------------------------------------------------------------------
+# Arithmetic on table columns (exercise vectorized path + NULL handling).
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE big(a DECIMAL(50,10), b DECIMAL(50,10));
+
+statement ok
+INSERT INTO big VALUES
+    (CAST(1.5 AS DECIMAL(50,10)), CAST(2.5 AS DECIMAL(50,10))),
+    (CAST(-3.25 AS DECIMAL(50,10)), CAST(1.5 AS DECIMAL(50,10))),
+    (CAST(0 AS DECIMAL(50,10)), CAST(0 AS DECIMAL(50,10))),
+    (NULL, CAST(7 AS DECIMAL(50,10)));
+
+# Add
+query I
+SELECT a + b FROM big ORDER BY a NULLS LAST;
+----
+-1.7500000000
+0.0000000000
+4.0000000000
+NULL
+
+# Subtract
+query I
+SELECT a - b FROM big ORDER BY a NULLS LAST;
+----
+-4.7500000000
+0.0000000000
+-1.0000000000
+NULL
+
+# Multiply
+query I
+SELECT a * b FROM big ORDER BY a NULLS LAST;
+----
+-4.8750000000
+0.0000000000
+3.7500000000
+NULL
+
+# Unary negate
+query I
+SELECT -a FROM big ORDER BY a NULLS LAST;
+----
+3.2500000000
+0.0000000000
+-1.5000000000
+NULL
+
+# Modulo (only rows where b != 0).
+query I
+SELECT a % b FROM big WHERE b != 0 ORDER BY a NULLS LAST;
+----
+-0.2500000000
+1.5000000000
+NULL
+
+# Division returns DECIMAL.
+query I
+SELECT typeof(a / b) FROM big LIMIT 1;
+----
+DECIMAL(64,14)
+
+# ---------------------------------------------------------------------------
+# Comparisons feed INT256 through constant_filter / in_filter paths.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT COUNT(*) FROM big WHERE a > CAST(0 AS DECIMAL(50,10));
+----
+1
+
+query I
+SELECT COUNT(*) FROM big WHERE a = CAST(0 AS DECIMAL(50,10));
+----
+1
+
+query I
+SELECT COUNT(*) FROM big WHERE a IN (CAST(1.5 AS DECIMAL(50,10)), CAST(-3.25 AS DECIMAL(50,10)));
+----
+2
+
+query I
+SELECT COUNT(*) FROM big WHERE a BETWEEN CAST(-5 AS DECIMAL(50,10)) AND CAST(2 AS DECIMAL(50,10));
+----
+3
+
+# ---------------------------------------------------------------------------
+# Cross-width: DECIMAL(INT128) op DECIMAL(INT256) should promote INT128 -> INT256.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST(1 AS DECIMAL(38,0)) + CAST(2 AS DECIMAL(50,0));
+----
+3
+
+query I
+SELECT typeof(CAST(1 AS DECIMAL(38,0)) + CAST(2 AS DECIMAL(50,0)));
+----
+DECIMAL(51,0)
+
+# Inverse: plain integer + DECIMAL(INT256).
+query I
+SELECT 5 + CAST(10 AS DECIMAL(50,0));
+----
+15
+
+# ---------------------------------------------------------------------------
+# During the calculation process, the maximum allowed precision is 76 digits.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST('99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0)) + CAST(1 AS DECIMAL(65,0));
+----
+100000000000000000000000000000000000000000000000000000000000000000
+
+query I
+SELECT CAST('99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0)) * CAST('100000000000' AS DECIMAL(20,0));
+----
+9999999999999999999999999999999999999999999999999999999999999999900000000000
+
+# Multiplication overflow within DECIMAL(76,0).
+statement error
+SELECT CAST('99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0)) * CAST('1000000000000' AS DECIMAL(20,0));
+----
+Out of Range Error
+
+# Negation of INT256 minimum decimal (edge case).
+# The minimum DECIMAL(76,0) is -(10^76 - 1), so -(-X) == X should round-trip.
+query I
+SELECT -(-CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)));
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+# Division by zero -> NULL (DuckDB default ieee mode is false-ish: ignore zero).
+query I
+SELECT a % CAST(0 AS DECIMAL(50,10)) FROM big WHERE a IS NOT NULL ORDER BY a;
+----
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE big;

@@ -13,6 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 
 #include <limits>
@@ -64,6 +65,16 @@ template <>
 inline hugeint_t NullValue() {
 	hugeint_t min;
 	min.lower = 0;
+	min.upper = std::numeric_limits<int64_t>::min();
+	return min;
+}
+
+template <>
+inline int256_t NullValue() {
+	int256_t min;
+	min.lower = 0;
+	min.lower_middle = 0;
+	min.upper_middle = 0;
 	min.upper = std::numeric_limits<int64_t>::min();
 	return min;
 }

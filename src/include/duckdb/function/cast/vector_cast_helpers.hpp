@@ -205,6 +205,8 @@ struct VectorCastHelpers {
 		case PhysicalType::INT128:
 			return TemplatedDecimalCast<T, hugeint_t, TryCastToDecimal>(source, result, count, parameters, width,
 			                                                            scale);
+		case PhysicalType::INT256:
+			return TemplatedDecimalCast<T, int256_t, TryCastToDecimal>(source, result, count, parameters, width, scale);
 		default:
 			throw InternalException("Unimplemented internal type for decimal");
 		}

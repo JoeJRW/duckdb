@@ -1,4 +1,5 @@
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -1066,6 +1067,9 @@ void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t count) {
 	case PhysicalType::INT128:
 		TemplatedDistinctExecute<hugeint_t, OP>(left, right, result, count);
 		break;
+	case PhysicalType::INT256:
+		TemplatedDistinctExecute<int256_t, OP>(left, right, result, count);
+		break;
 	case PhysicalType::UINT128:
 		TemplatedDistinctExecute<uhugeint_t, OP>(left, right, result, count);
 		break;
@@ -1124,6 +1128,9 @@ idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, optional_ptr
 	case PhysicalType::INT128:
 		return DistinctSelect<hugeint_t, hugeint_t, OP>(left, right, sel.get(), count, true_sel.get(), false_sel.get(),
 		                                                null_mask);
+	case PhysicalType::INT256:
+		return DistinctSelect<int256_t, int256_t, OP>(left, right, sel.get(), count, true_sel.get(), false_sel.get(),
+		                                              null_mask);
 	case PhysicalType::UINT128:
 		return DistinctSelect<uhugeint_t, uhugeint_t, OP>(left, right, sel.get(), count, true_sel.get(),
 		                                                  false_sel.get(), null_mask);

@@ -3,6 +3,7 @@
 
 #include "duckdb/common/vector_operations/general_cast.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 
@@ -26,6 +27,9 @@ static bool FromDecimalCast(Vector &source, Vector &result, idx_t count, CastPar
 	case PhysicalType::INT128:
 		return VectorCastHelpers::TemplatedDecimalCast<hugeint_t, T, TryCastFromDecimal>(source, result, count,
 		                                                                                 parameters, width, scale);
+	case PhysicalType::INT256:
+		return VectorCastHelpers::TemplatedDecimalCast<int256_t, T, TryCastFromDecimal>(source, result, count,
+		                                                                                parameters, width, scale);
 	default:
 		throw InternalException("Unimplemented internal type for decimal");
 	}
@@ -145,6 +149,22 @@ bool CanScaleDownDecimal<hugeint_t>(hugeint_t input, DecimalScaleInput<hugeint_t
 	return rounded_input < data.limit && rounded_input > -data.limit;
 }
 
+template <>
+bool CanScaleDownDecimal<int256_t>(int256_t input, DecimalScaleInput<int256_t> &data) {
+	auto divisor = Int256::POWERS_OF_TEN[data.source_scale];
+	int256_t value = input % divisor;
+	int256_t rounded_input = input;
+	if (rounded_input < int256_t(0, 0, 0, 0)) {
+		rounded_input = -rounded_input;
+		value = -value;
+	}
+	int256_t two(0, 0, 0, 2);
+	if (value >= divisor / two) {
+		rounded_input += divisor;
+	}
+	return rounded_input < data.limit && rounded_input > -data.limit;
+}
+
 struct DecimalScaleDownCheckOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
@@ -207,6 +227,8 @@ static bool DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count
 		case PhysicalType::INT128:
 			return TemplatedDecimalScaleUp<SOURCE, hugeint_t, POWERS_SOURCE, Hugeint>(source, result, count,
 			                                                                          parameters);
+		case PhysicalType::INT256:
+			return TemplatedDecimalScaleUp<SOURCE, int256_t, POWERS_SOURCE, Int256>(source, result, count, parameters);
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal");
 		}
@@ -221,6 +243,8 @@ static bool DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count
 			return TemplatedDecimalScaleDown<SOURCE, int64_t, POWERS_SOURCE>(source, result, count, parameters);
 		case PhysicalType::INT128:
 			return TemplatedDecimalScaleDown<SOURCE, hugeint_t, POWERS_SOURCE>(source, result, count, parameters);
+		case PhysicalType::INT256:
+			return TemplatedDecimalScaleDown<SOURCE, int256_t, POWERS_SOURCE>(source, result, count, parameters);
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal");
 		}
@@ -294,6 +318,8 @@ BoundCastInfo DefaultCasts::DecimalCastSwitch(BindCastInput &input, const Logica
 			return DecimalDecimalCastSwitch<int64_t, NumericHelper>;
 		case PhysicalType::INT128:
 			return DecimalDecimalCastSwitch<hugeint_t, Hugeint>;
+		case PhysicalType::INT256:
+			return DecimalDecimalCastSwitch<int256_t, Int256>;
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal in decimal_decimal cast");
 		}
@@ -312,6 +338,8 @@ BoundCastInfo DefaultCasts::DecimalCastSwitch(BindCastInput &input, const Logica
 			return DecimalToStringCast<int64_t>;
 		case PhysicalType::INT128:
 			return DecimalToStringCast<hugeint_t>;
+		case PhysicalType::INT256:
+			return DecimalToStringCast<int256_t>;
 		default:
 			throw InternalException("Unimplemented internal decimal type");
 		}

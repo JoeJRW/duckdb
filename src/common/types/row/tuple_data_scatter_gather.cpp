@@ -4,6 +4,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
@@ -1231,6 +1232,9 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 	case PhysicalType::INT128:
 		result.function = TupleDataGetScatterFunction<hugeint_t>(within_collection);
 		break;
+	case PhysicalType::INT256:
+		result.function = TupleDataGetScatterFunction<int256_t>(within_collection);
+		break;
 	case PhysicalType::UINT8:
 		result.function = TupleDataGetScatterFunction<uint8_t>(within_collection);
 		break;
@@ -1836,6 +1840,9 @@ static TupleDataGatherFunction TupleDataGetGatherFunctionInternal(const LogicalT
 		break;
 	case PhysicalType::INT128:
 		result.function = TupleDataGetGatherFunction<hugeint_t>(within_collection);
+		break;
+	case PhysicalType::INT256:
+		result.function = TupleDataGetGatherFunction<int256_t>(within_collection);
 		break;
 	case PhysicalType::UINT8:
 		result.function = TupleDataGetGatherFunction<uint8_t>(within_collection);

@@ -22,6 +22,7 @@ add_library_unity(
   hash.cpp
   hugeint.cpp
   uhugeint.cpp
+  int256.cpp
   uuid.cpp
   hyperloglog.cpp
   interval.cpp

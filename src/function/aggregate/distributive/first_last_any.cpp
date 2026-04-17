@@ -271,8 +271,10 @@ AggregateFunction GetDecimalFirstFunction(const LogicalType &type) {
 		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::INTEGER);
 	case PhysicalType::INT64:
 		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::BIGINT);
-	default:
+	case PhysicalType::INT128:
 		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::HUGEINT);
+	default:
+		return GetFirstFunction<LAST, SKIP_NULLS>(LogicalType::INT256);
 	}
 }
 template <bool LAST, bool SKIP_NULLS>
@@ -304,6 +306,8 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return GetFirstAggregateTemplated<uint64_t, LAST, SKIP_NULLS>(type);
 	case PhysicalType::INT128:
 		return GetFirstAggregateTemplated<hugeint_t, LAST, SKIP_NULLS>(type);
+	case PhysicalType::INT256:
+		return GetFirstAggregateTemplated<int256_t, LAST, SKIP_NULLS>(type);
 	case PhysicalType::UINT128:
 		return GetFirstAggregateTemplated<uhugeint_t, LAST, SKIP_NULLS>(type);
 	case PhysicalType::FLOAT:

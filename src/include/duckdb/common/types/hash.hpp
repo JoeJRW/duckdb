@@ -16,6 +16,7 @@ namespace duckdb {
 
 struct string_t;
 struct interval_t; // NOLINT
+struct int256_t;   // NOLINT
 
 //! Combine two hashes by XORing them
 inline hash_t CombineHash(hash_t left, hash_t right) {
@@ -63,6 +64,8 @@ template <>
 DUCKDB_API hash_t Hash(hugeint_t val);
 template <>
 DUCKDB_API hash_t Hash(uhugeint_t val);
+template <>
+DUCKDB_API hash_t Hash(int256_t val);
 template <>
 DUCKDB_API hash_t Hash(float val);
 template <>

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/function/aggregate_state.hpp"
@@ -77,6 +78,36 @@ struct HugeintAdd {
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
 		AddNumber(state, Hugeint::Multiply(input, UnsafeNumericCast<int64_t>(count)));
+	}
+};
+
+struct Int256Add {
+	template <class STATE, class T>
+	static void AddNumber(STATE &state, T input) {
+		state.value = Int256::Add(state.value, input);
+	}
+
+	template <class STATE, class T>
+	static void AddConstant(STATE &state, T input, idx_t count) {
+		AddNumber(state, Int256::Multiply(input, Int256::Convert(UnsafeNumericCast<int64_t>(count))));
+	}
+};
+
+// Converts hugeint_t inputs to int256_t for wider accumulation
+struct HugeintToInt256Add {
+	template <class STATE, class T>
+	static void AddNumber(STATE &state, T input) {
+		int256_t converted;
+		Int256::TryConvert(input, converted);
+		state.value = Int256::Add(state.value, converted);
+	}
+
+	template <class STATE, class T>
+	static void AddConstant(STATE &state, T input, idx_t count) {
+		int256_t converted;
+		Int256::TryConvert(input, converted);
+		int256_t total = Int256::Multiply(converted, int256_t(UnsafeNumericCast<int64_t>(count)));
+		state.value = Int256::Add(state.value, total);
 	}
 };
 

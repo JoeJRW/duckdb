@@ -283,6 +283,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 			return Value::DECIMAL(int64_t(-NumericHelper::POWERS_OF_TEN[width] + 1), width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(-Hugeint::POWERS_OF_TEN[width] + 1, width, scale);
+		case PhysicalType::INT256:
+			return Value::DECIMAL(-Int256::POWERS_OF_TEN[width] + 1, width, scale);
 		default:
 			throw InternalException("Unknown decimal type");
 		}
@@ -373,6 +375,12 @@ Value Value::MaximumValue(const LogicalType &type) {
 			return Value::DECIMAL(int64_t(NumericHelper::POWERS_OF_TEN[width] - 1), width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(Hugeint::POWERS_OF_TEN[width] - 1, width, scale);
+		case PhysicalType::INT256: {
+			int256_t max_val = Int256::POWERS_OF_TEN[width];
+			int256_t one(1);
+			max_val -= one;
+			return Value::DECIMAL(max_val, width, scale);
+		}
 		default:
 			throw InternalException("Unknown decimal type");
 		}
@@ -625,6 +633,22 @@ Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
 	D_ASSERT(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
 	Value result(LogicalType::DECIMAL(width, scale));
 	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(int256_t value, uint8_t width, uint8_t scale) {
+	D_ASSERT(width > Decimal::MAX_WIDTH_INT128 && width <= Decimal::MAX_WIDTH_INT256);
+	Value result(LogicalType::DECIMAL(width, scale));
+	result.value_.int256 = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::INT256(int256_t value) {
+	// No distinct INT256 logical type yet; use DECIMAL with the maximum INT256 width
+	Value result(LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0));
+	result.value_.int256 = value;
 	result.is_null = false;
 	return result;
 }
@@ -1080,6 +1104,11 @@ Value Value::CreateValue(uhugeint_t value) {
 }
 
 template <>
+Value Value::CreateValue(int256_t value) {
+	return Value::INT256(value);
+}
+
+template <>
 Value Value::CreateValue(date_t value) {
 	return Value::DATE(value);
 }
@@ -1302,6 +1331,20 @@ uhugeint_t Value::GetValue() const {
 	return GetValueInternal<uhugeint_t>();
 }
 template <>
+int256_t Value::GetValue() const {
+	if (IsNull()) {
+		throw InternalException("Calling GetValue on a value that is NULL");
+	}
+	if (type_.InternalType() == PhysicalType::INT256) {
+		return value_.int256;
+	}
+	// Fall back to conversion from hugeint
+	hugeint_t hv = GetValueInternal<hugeint_t>();
+	int256_t result;
+	Int256::TryConvert(hv, result);
+	return result;
+}
+template <>
 string Value::GetValue() const {
 	return ToString();
 }
@@ -1466,6 +1509,22 @@ Value Value::Numeric(const LogicalType &type, uhugeint_t value) {
 	}
 }
 
+Value Value::Numeric(const LogicalType &type, int256_t value) {
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL:
+		if (type.InternalType() == PhysicalType::INT256) {
+			return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
+		}
+		// fall through to cast-down path
+		break;
+	default:
+		break;
+	}
+	int64_t v64 = 0;
+	Int256::TryCast(value, v64);
+	return Value::Numeric(type, v64);
+}
+
 //===--------------------------------------------------------------------===//
 // GetValueUnsafe
 //===--------------------------------------------------------------------===//
@@ -1533,6 +1592,12 @@ template <>
 uhugeint_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::UINT128);
 	return value_.uhugeint;
+}
+
+template <>
+int256_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT256);
+	return value_.int256;
 }
 
 template <>
@@ -1804,6 +1869,10 @@ uhugeint_t UhugeIntValue::Get(const Value &value) {
 	return value.GetValueUnsafe<uhugeint_t>();
 }
 
+int256_t Int256Value::Get(const Value &value) {
+	return value.GetValueUnsafe<int256_t>();
+}
+
 float FloatValue::Get(const Value &value) {
 	return value.GetValueUnsafe<float>();
 }
@@ -1923,28 +1992,30 @@ const LogicalType &UnionValue::GetType(const Value &value) {
 	return UnionType::GetMemberType(value.type(), UnionValue::GetTag(value));
 }
 
-hugeint_t IntegralValue::Get(const Value &value) {
+int256_t IntegralValue::Get(const Value &value) {
 	switch (value.type().InternalType()) {
 	case PhysicalType::INT8:
-		return TinyIntValue::Get(value);
+		return Int256::Convert(TinyIntValue::Get(value));
 	case PhysicalType::INT16:
-		return SmallIntValue::Get(value);
+		return Int256::Convert(SmallIntValue::Get(value));
 	case PhysicalType::INT32:
-		return IntegerValue::Get(value);
+		return Int256::Convert(IntegerValue::Get(value));
 	case PhysicalType::INT64:
-		return BigIntValue::Get(value);
+		return Int256::Convert(BigIntValue::Get(value));
 	case PhysicalType::INT128:
-		return HugeIntValue::Get(value);
+		return Int256::Convert(HugeIntValue::Get(value));
+	case PhysicalType::INT256:
+		return Int256Value::Get(value);
 	case PhysicalType::UINT8:
-		return UTinyIntValue::Get(value);
+		return Int256::Convert(UTinyIntValue::Get(value));
 	case PhysicalType::UINT16:
-		return USmallIntValue::Get(value);
+		return Int256::Convert(USmallIntValue::Get(value));
 	case PhysicalType::UINT32:
-		return UIntegerValue::Get(value);
+		return Int256::Convert(UIntegerValue::Get(value));
 	case PhysicalType::UINT64:
-		return NumericCast<int64_t>(UBigIntValue::Get(value));
+		return Int256::Convert(UBigIntValue::Get(value));
 	case PhysicalType::UINT128:
-		return static_cast<hugeint_t>(UhugeIntValue::Get(value));
+		return Int256::Convert(UhugeIntValue::Get(value));
 	default:
 		throw InternalException("Invalid internal type \"%s\" for IntegralValue::Get", value.type().ToString());
 	}
@@ -2179,6 +2250,9 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 	case PhysicalType::UINT128:
 		serializer.WriteProperty(102, "value", value_.uhugeint);
 		break;
+	case PhysicalType::INT256:
+		serializer.WriteProperty(102, "value", value_.int256);
+		break;
 	case PhysicalType::FLOAT:
 		serializer.WriteProperty(102, "value", value_.float_);
 		break;
@@ -2281,6 +2355,9 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		break;
 	case PhysicalType::INT128:
 		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>(102, "value");
+		break;
+	case PhysicalType::INT256:
+		new_value.value_.int256 = deserializer.ReadProperty<int256_t>(102, "value");
 		break;
 	case PhysicalType::FLOAT:
 		new_value.value_.float_ = deserializer.ReadProperty<float>(102, "value");

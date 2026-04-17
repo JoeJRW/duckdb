@@ -4,10 +4,12 @@
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/int256.hpp"
 
 namespace duckdb {
 
@@ -229,6 +231,15 @@ bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &resul
 	return true;
 }
 
+template <>
+bool TryAddOperator::Operation(int256_t left, int256_t right, int256_t &result) {
+	if (!Int256::TryAddInPlace(left, right)) {
+		return false;
+	}
+	result = left;
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // add decimal with overflow check
 //===--------------------------------------------------------------------===//
@@ -274,10 +285,36 @@ bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result
 }
 
 template <>
+bool TryDecimalAdd::Operation(int256_t left, int256_t right, int256_t &result) {
+	if (!TryAddOperator::Operation(left, right, result)) {
+		return false;
+	}
+	const int256_t &limit = Int256::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT256];
+	int256_t neg_limit;
+	if (!Int256::TryNegate(limit, neg_limit)) {
+		return false;
+	}
+	if (result <= neg_limit || result >= limit) {
+		return false;
+	}
+	return true;
+}
+
+template <>
 hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
 	hugeint_t result;
 	if (!TryDecimalAdd::Operation(left, right, result)) {
 		throw OutOfRangeException("Overflow in addition of DECIMAL(38) (%s + %s);", left.ToString(), right.ToString());
+	}
+	return result;
+}
+
+template <>
+int256_t DecimalAddOverflowCheck::Operation(int256_t left, int256_t right) {
+	int256_t result;
+	if (!TryDecimalAdd::Operation(left, right, result)) {
+		throw OutOfRangeException("Overflow in addition of DECIMAL(%d) (%s + %s);", Decimal::MAX_WIDTH_INT256,
+		                          left.ToString(), right.ToString());
 	}
 	return result;
 }

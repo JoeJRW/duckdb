@@ -1,6 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -110,6 +111,8 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		return OP::Operation(left.GetValueUnsafe<uhugeint_t>(), right.GetValueUnsafe<uhugeint_t>());
 	case PhysicalType::INT128:
 		return OP::Operation(left.GetValueUnsafe<hugeint_t>(), right.GetValueUnsafe<hugeint_t>());
+	case PhysicalType::INT256:
+		return OP::Operation(left.GetValueUnsafe<int256_t>(), right.GetValueUnsafe<int256_t>());
 	case PhysicalType::FLOAT:
 		return OP::Operation(left.GetValueUnsafe<float>(), right.GetValueUnsafe<float>());
 	case PhysicalType::DOUBLE:

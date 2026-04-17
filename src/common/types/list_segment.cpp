@@ -1,6 +1,7 @@
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 
 namespace duckdb {
 
@@ -606,6 +607,9 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		break;
 	case PhysicalType::INT128:
 		SegmentPrimitiveFunction<hugeint_t>(functions);
+		break;
+	case PhysicalType::INT256:
+		SegmentPrimitiveFunction<int256_t>(functions);
 		break;
 	case PhysicalType::UINT128:
 		SegmentPrimitiveFunction<uhugeint_t>(functions);

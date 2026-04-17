@@ -1,5 +1,6 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/function/window/window_boundaries_state.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -272,6 +273,9 @@ static idx_t FindRangeBound(WindowCursor &range_lo, WindowCursor &range_hi, cons
 	case PhysicalType::INT128:
 		return FindTypedRangeBound<hugeint_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
 		                                                chunk_idx, prev);
+	case PhysicalType::INT256:
+		return FindTypedRangeBound<int256_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                               chunk_idx, prev);
 	case PhysicalType::UINT128:
 		return FindTypedRangeBound<uhugeint_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
 		                                                 chunk_idx, prev);

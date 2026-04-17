@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
 
 namespace duckdb {
@@ -21,7 +22,7 @@ struct QuantileValue {
 		switch (type.id()) {
 		case LogicalTypeId::DECIMAL: {
 			integral = IntegralValue::Get(v);
-			scaling = Hugeint::POWERS_OF_TEN[DecimalType::GetScale(type)];
+			scaling = Int256::POWERS_OF_TEN[DecimalType::GetScale(type)];
 			break;
 		}
 		default:
@@ -35,8 +36,8 @@ struct QuantileValue {
 	double dbl;
 
 	//	DECIMAL
-	hugeint_t integral;
-	hugeint_t scaling;
+	int256_t integral;
+	int256_t scaling;
 
 	inline bool operator==(const QuantileValue &other) const {
 		return val == other.val;

@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
@@ -169,6 +170,9 @@ void BaseAppender::AppendValueInternal(T input) {
 		case PhysicalType::INT128:
 			AppendDecimalValueInternal<T, hugeint_t>(col, input);
 			break;
+		case PhysicalType::INT256:
+			AppendDecimalValueInternal<T, int256_t>(col, input);
+			break;
 		default:
 			throw InternalException("Internal type not recognized for Decimal");
 		}
@@ -235,6 +239,11 @@ void BaseAppender::Append(hugeint_t value) {
 template <>
 void BaseAppender::Append(uhugeint_t value) {
 	AppendValueInternal<uhugeint_t>(value);
+}
+
+template <>
+void BaseAppender::Append(int256_t value) {
+	AppendValueInternal<int256_t>(value);
 }
 
 template <>

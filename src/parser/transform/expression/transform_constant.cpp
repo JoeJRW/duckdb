@@ -148,6 +148,11 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 				// successfully cast to bigint: bigint value
 				return make_uniq<ConstantExpression>(Value::UHUGEINT(uhugeint_value));
 			}
+			int256_t int256_value;
+			if (TryCast::Operation<string_t, int256_t>(str_val, int256_value)) {
+				// successfully cast to int256_t: int256_t value
+				return make_uniq<ConstantExpression>(Value::INT256(int256_value));
+			}
 		}
 		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;
 		if (try_cast_as_decimal && decimal_position.IsValid() &&

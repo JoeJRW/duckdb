@@ -14,6 +14,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/types/double_na_equal.hpp"
 
 namespace duckdb {
@@ -48,6 +49,8 @@ PhysicalType GetTypeId() {
 		return PhysicalType::INT128;
 	} else if (std::is_same<TYPE, uhugeint_t>()) {
 		return PhysicalType::UINT128;
+	} else if (std::is_same<TYPE, int256_t>()) {
+		return PhysicalType::INT256;
 	} else if (std::is_same<TYPE, date_t>()) {
 		return PhysicalType::INT32;
 	} else if (std::is_same<TYPE, dtime_t>()) {
@@ -108,7 +111,7 @@ bool TypeIsNumber() {
 	using TYPE = typename std::remove_cv<T>::type;
 
 	return std::is_integral<TYPE>() || std::is_floating_point<TYPE>() || std::is_same<TYPE, hugeint_t>() ||
-	       std::is_same<TYPE, uhugeint_t>();
+	       std::is_same<TYPE, uhugeint_t>() || std::is_same<TYPE, int256_t>();
 }
 
 template <class T>

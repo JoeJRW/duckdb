@@ -103,6 +103,7 @@ static bool IsRangeType(const LogicalType &type) {
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
 	case PhysicalType::INT128:
+	case PhysicalType::INT256:
 	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 
 namespace duckdb {
@@ -53,6 +54,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(bool input, int64_t &result, CastPar
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(bool input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(bool input, int256_t &result, CastParameters &parameters, uint8_t width,
+                                            uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, bool &result, CastParameters &parameters, uint8_t width,
@@ -65,6 +69,9 @@ bool TryCastFromDecimal::Operation(int64_t input, bool &result, CastParameters &
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, bool &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, bool &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -82,6 +89,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(int8_t input, int64_t &result, CastP
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(int8_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(int8_t input, int256_t &result, CastParameters &parameters, uint8_t width,
+                                            uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, int8_t &result, CastParameters &parameters, uint8_t width,
@@ -94,6 +104,9 @@ bool TryCastFromDecimal::Operation(int64_t input, int8_t &result, CastParameters
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, int8_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, int8_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -111,6 +124,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(int16_t input, int64_t &result, Cast
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(int16_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(int16_t input, int256_t &result, CastParameters &parameters, uint8_t width,
+                                            uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, int16_t &result, CastParameters &parameters, uint8_t width,
@@ -123,6 +139,9 @@ bool TryCastFromDecimal::Operation(int64_t input, int16_t &result, CastParameter
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, int16_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, int16_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -140,6 +159,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(int32_t input, int64_t &result, Cast
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(int32_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(int32_t input, int256_t &result, CastParameters &parameters, uint8_t width,
+                                            uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, int32_t &result, CastParameters &parameters, uint8_t width,
@@ -152,6 +174,9 @@ bool TryCastFromDecimal::Operation(int64_t input, int32_t &result, CastParameter
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, int32_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, int32_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -169,6 +194,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(int64_t input, int64_t &result, Cast
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(int64_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(int64_t input, int256_t &result, CastParameters &parameters, uint8_t width,
+                                            uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, int64_t &result, CastParameters &parameters, uint8_t width,
@@ -181,6 +209,9 @@ bool TryCastFromDecimal::Operation(int64_t input, int64_t &result, CastParameter
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, int64_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, int64_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -198,6 +229,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(hugeint_t input, int64_t &result, Ca
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(hugeint_t input, hugeint_t &result, CastParameters &parameters,
                                             uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(hugeint_t input, int256_t &result, CastParameters &parameters,
+                                            uint8_t width, uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
@@ -210,6 +244,9 @@ bool TryCastFromDecimal::Operation(int64_t input, hugeint_t &result, CastParamet
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -227,6 +264,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(uhugeint_t input, int64_t &result, C
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(uhugeint_t input, hugeint_t &result, CastParameters &parameters,
                                             uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(uhugeint_t input, int256_t &result, CastParameters &parameters,
+                                            uint8_t width, uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, uhugeint_t &result, CastParameters &parameters, uint8_t width,
@@ -239,6 +279,9 @@ bool TryCastFromDecimal::Operation(int64_t input, uhugeint_t &result, CastParame
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, uhugeint_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, uhugeint_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -256,6 +299,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(uint8_t input, int64_t &result, Cast
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(uint8_t input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(uint8_t input, int256_t &result, CastParameters &parameters, uint8_t width,
+                                            uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, uint8_t &result, CastParameters &parameters, uint8_t width,
@@ -268,6 +314,9 @@ bool TryCastFromDecimal::Operation(int64_t input, uint8_t &result, CastParameter
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, uint8_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, uint8_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -285,6 +334,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(uint16_t input, int64_t &result, Cas
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(uint16_t input, hugeint_t &result, CastParameters &parameters,
                                             uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(uint16_t input, int256_t &result, CastParameters &parameters,
+                                            uint8_t width, uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, uint16_t &result, CastParameters &parameters, uint8_t width,
@@ -297,6 +349,9 @@ bool TryCastFromDecimal::Operation(int64_t input, uint16_t &result, CastParamete
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, uint16_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, uint16_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -314,6 +369,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(uint32_t input, int64_t &result, Cas
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(uint32_t input, hugeint_t &result, CastParameters &parameters,
                                             uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(uint32_t input, int256_t &result, CastParameters &parameters,
+                                            uint8_t width, uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, uint32_t &result, CastParameters &parameters, uint8_t width,
@@ -326,6 +384,9 @@ bool TryCastFromDecimal::Operation(int64_t input, uint32_t &result, CastParamete
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, uint32_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, uint32_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -343,6 +404,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(uint64_t input, int64_t &result, Cas
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(uint64_t input, hugeint_t &result, CastParameters &parameters,
                                             uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(uint64_t input, int256_t &result, CastParameters &parameters,
+                                            uint8_t width, uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, uint64_t &result, CastParameters &parameters, uint8_t width,
@@ -355,6 +419,9 @@ bool TryCastFromDecimal::Operation(int64_t input, uint64_t &result, CastParamete
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, uint64_t &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, uint64_t &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -372,6 +439,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(float input, int64_t &result, CastPa
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(float input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(float input, int256_t &result, CastParameters &parameters, uint8_t width,
+                                            uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, float &result, CastParameters &parameters, uint8_t width,
@@ -384,6 +454,9 @@ bool TryCastFromDecimal::Operation(int64_t input, float &result, CastParameters 
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, float &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -401,6 +474,9 @@ DUCKDB_API bool TryCastToDecimal::Operation(double input, int64_t &result, CastP
 template <>
 DUCKDB_API bool TryCastToDecimal::Operation(double input, hugeint_t &result, CastParameters &parameters, uint8_t width,
                                             uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimal::Operation(double input, int256_t &result, CastParameters &parameters, uint8_t width,
+                                            uint8_t scale);
 
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, double &result, CastParameters &parameters, uint8_t width,
@@ -413,6 +489,9 @@ bool TryCastFromDecimal::Operation(int64_t input, double &result, CastParameters
                                    uint8_t scale);
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, double &result, CastParameters &parameters, uint8_t width,
+                                   uint8_t scale);
+template <>
+bool TryCastFromDecimal::Operation(int256_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale);
 
 //===--------------------------------------------------------------------===//
@@ -431,6 +510,9 @@ template <>
 DUCKDB_API bool TryCastToDecimal::Operation(string_t input, hugeint_t &result, CastParameters &parameters,
                                             uint8_t width, uint8_t scale);
 template <>
+DUCKDB_API bool TryCastToDecimal::Operation(string_t input, int256_t &result, CastParameters &parameters,
+                                            uint8_t width, uint8_t scale);
+template <>
 DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, int16_t &result, CastParameters &parameters,
                                                           uint8_t width, uint8_t scale);
 template <>
@@ -441,6 +523,9 @@ DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, int64_
                                                           uint8_t width, uint8_t scale);
 template <>
 DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result, CastParameters &parameters,
+                                                          uint8_t width, uint8_t scale);
+template <>
+DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, int256_t &result, CastParameters &parameters,
                                                           uint8_t width, uint8_t scale);
 
 struct StringCastFromDecimal {
@@ -458,6 +543,8 @@ template <>
 string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result);
 template <>
 string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result);
+template <>
+string_t StringCastFromDecimal::Operation(int256_t input, uint8_t width, uint8_t scale, Vector &result);
 
 //===--------------------------------------------------------------------===//
 // Cast VARCHAR <-> Decimal
@@ -477,6 +564,11 @@ struct DecimalCastTraits<hugeint_t> {
 template <>
 struct DecimalCastTraits<uhugeint_t> {
 	using POWERS_OF_TEN_CLASS = Uhugeint;
+};
+
+template <>
+struct DecimalCastTraits<int256_t> {
+	using POWERS_OF_TEN_CLASS = Int256;
 };
 
 template <class T>

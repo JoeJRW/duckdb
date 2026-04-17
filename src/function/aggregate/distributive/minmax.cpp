@@ -49,6 +49,8 @@ static AggregateFunction GetUnaryAggregate(LogicalType type) {
 		return AggregateFunction::UnaryAggregate<MinMaxState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	case PhysicalType::INT128:
 		return AggregateFunction::UnaryAggregate<MinMaxState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+	case PhysicalType::INT256:
+		return AggregateFunction::UnaryAggregate<MinMaxState<int256_t>, int256_t, int256_t, OP>(type, type);
 	case PhysicalType::UINT128:
 		return AggregateFunction::UnaryAggregate<MinMaxState<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type);
 	case PhysicalType::FLOAT:

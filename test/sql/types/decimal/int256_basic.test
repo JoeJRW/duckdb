@@ -1,0 +1,27 @@
+# name: test/sql/types/decimal/int256_basic.test
+# description: DECIMAL(p>38,s) backed by PhysicalType::INT256 — type registration / CREATE / typeof.
+# group: [decimal]
+
+# DECIMAL width > 38 should now be accepted (previously threw at parse time).
+statement ok
+CREATE TABLE t50 (v DECIMAL(50, 10));
+
+statement ok
+CREATE TABLE t65 (v DECIMAL(65, 0));
+
+# typeof for DECIMAL(p>38) should report the precision and scale verbatim.
+query I
+SELECT typeof(CAST(1 AS DECIMAL(50, 10)));
+----
+DECIMAL(50,10)
+
+query I
+SELECT typeof(CAST(1 AS DECIMAL(65, 0)));
+----
+DECIMAL(65,0)
+
+statement ok
+DROP TABLE t50;
+
+statement ok
+DROP TABLE t65;

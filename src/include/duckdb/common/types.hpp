@@ -175,6 +175,7 @@ enum class PhysicalType : uint8_t {
 	UNKNOWN = 205, // Unknown physical type of user defined types
 	/// Boolean as 1 bit, LSB bit-packed ordering
 	BIT = 206,
+	INT256 = 207, // 256-bit signed integers (backs DECIMAL with precision > 38)
 
 	INVALID = 255
 };
@@ -246,7 +247,8 @@ enum class LogicalTypeId : uint8_t {
 	ARRAY = 108,
 
 	VARIANT = 109,
-	BLOB_LITERAL = 129/* blob literals, used for constant blob - only exists while binding */
+	BLOB_LITERAL = 129, /* blob literals, used for constant blob - only exists while binding */
+	INT256 = 130
 };
 
 struct ExtraTypeInfo;
@@ -429,6 +431,7 @@ public:
 	static constexpr const LogicalTypeId LAMBDA = LogicalTypeId::LAMBDA;
 	static constexpr const LogicalTypeId INVALID = LogicalTypeId::INVALID;
 	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
+	static constexpr const LogicalTypeId INT256 = LogicalTypeId::INT256;
 
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(uint8_t width, uint8_t scale);                 // NOLINT

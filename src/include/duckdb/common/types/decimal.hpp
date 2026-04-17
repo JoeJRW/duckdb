@@ -35,6 +35,11 @@ struct DecimalWidth<hugeint_t> {
 	static constexpr uint8_t max = 38;
 };
 
+template <>
+struct DecimalWidth<int256_t> {
+	static constexpr uint8_t max = 76;
+};
+
 //! The Decimal class is a static class that holds helper functions for the Decimal type
 class Decimal {
 public:
@@ -42,12 +47,16 @@ public:
 	static constexpr uint8_t MAX_WIDTH_INT32 = DecimalWidth<int32_t>::max;
 	static constexpr uint8_t MAX_WIDTH_INT64 = DecimalWidth<int64_t>::max;
 	static constexpr uint8_t MAX_WIDTH_INT128 = DecimalWidth<hugeint_t>::max;
-	static constexpr uint8_t MAX_WIDTH_DECIMAL = MAX_WIDTH_INT128;
+	static constexpr uint8_t MAX_WIDTH_INT256 = DecimalWidth<int256_t>::max;
+	static constexpr uint8_t MAX_WIDTH_DECIMAL = MAX_WIDTH_INT256;
+	//! Maximum width for DECIMAL columns in table storage (user-defined types)
+	static constexpr uint8_t MAX_WIDTH_STORAGE = 65;
 
 public:
 	static string ToString(int16_t value, uint8_t width, uint8_t scale);
 	static string ToString(int32_t value, uint8_t width, uint8_t scale);
 	static string ToString(int64_t value, uint8_t width, uint8_t scale);
 	static string ToString(hugeint_t value, uint8_t width, uint8_t scale);
+	static string ToString(int256_t value, uint8_t width, uint8_t scale);
 };
 } // namespace duckdb

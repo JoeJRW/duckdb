@@ -297,6 +297,70 @@ template <>
 DUCKDB_API bool TryCast::Operation(uhugeint_t input, double &result, bool strict);
 
 //===--------------------------------------------------------------------===//
+// Cast int256_t -> Numeric
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, bool &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, int8_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, int16_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, int32_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, int64_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, hugeint_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, uhugeint_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, uint8_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, uint16_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, uint32_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, uint64_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, float &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int256_t input, double &result, bool strict);
+
+//===--------------------------------------------------------------------===//
+// Cast Numeric -> int256_t
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCast::Operation(bool input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int8_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int16_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int32_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(int64_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(uint8_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(uint16_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(uint32_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(uint64_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(hugeint_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(uhugeint_t input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(float input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(double input, int256_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(string_t input, int256_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
 // Cast uint8_t -> Numeric
 //===--------------------------------------------------------------------===//
 template <>

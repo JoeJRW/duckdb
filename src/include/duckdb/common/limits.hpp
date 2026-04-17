@@ -10,6 +10,7 @@
 
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/types.hpp"
 
 #include <type_traits>
@@ -75,6 +76,28 @@ struct NumericLimits<uhugeint_t> {
 	}
 	static constexpr idx_t Digits() {
 		return 39;
+	}
+};
+
+template <>
+struct NumericLimits<int256_t> {
+	static constexpr int256_t Minimum() {
+		// -2^255 = { INT64_MIN, 0, 0, 0 }
+		return {std::numeric_limits<int64_t>::lowest(), 0, 0, 0};
+	}
+	static constexpr int256_t Maximum() {
+		// 2^255 - 1 = { INT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX }
+		return {std::numeric_limits<int64_t>::max(), std::numeric_limits<uint64_t>::max(),
+		        std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
+	}
+	static constexpr bool IsSigned() {
+		return true;
+	}
+	static constexpr bool IsIntegral() {
+		return true;
+	}
+	static constexpr idx_t Digits() {
+		return 78;
 	}
 };
 

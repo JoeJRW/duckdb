@@ -74,6 +74,8 @@ idx_t CompressionFunctionSet::GetCompressionIndex(PhysicalType physical_type) {
 		return 17;
 	case PhysicalType::BIT:
 		return 18;
+	case PhysicalType::INT256:
+		return 19;
 	default:
 		throw InternalException("Unsupported physical type for compression index");
 	}
@@ -91,7 +93,7 @@ CompressionFunctionSet::CompressionFunctionSet() {
 	    PhysicalType::BOOL,    PhysicalType::UINT8,    PhysicalType::INT8,   PhysicalType::UINT16, PhysicalType::INT16,
 	    PhysicalType::UINT32,  PhysicalType::INT32,    PhysicalType::UINT64, PhysicalType::INT64,  PhysicalType::FLOAT,
 	    PhysicalType::DOUBLE,  PhysicalType::INTERVAL, PhysicalType::LIST,   PhysicalType::STRUCT, PhysicalType::ARRAY,
-	    PhysicalType::VARCHAR, PhysicalType::UINT128,  PhysicalType::INT128, PhysicalType::BIT,
+	    PhysicalType::VARCHAR, PhysicalType::UINT128,  PhysicalType::INT128, PhysicalType::BIT, PhysicalType::INT256,
 	};
 	for (idx_t type_index = 0; type_index < PHYSICAL_TYPE_COUNT; type_index++) {
 		const auto physical_type = physical_types[type_index];

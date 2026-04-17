@@ -38,6 +38,7 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
 	case PhysicalType::INT128:
+	case PhysicalType::INT256:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		break;
@@ -50,6 +51,7 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
 	case PhysicalType::INT128:
+	case PhysicalType::INT256:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		break;

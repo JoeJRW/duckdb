@@ -7,6 +7,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
+#include "duckdb/common/int256.hpp"
 
 namespace duckdb {
 
@@ -244,6 +245,8 @@ CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {
 		return ConstantGetFunction<uint64_t>(data_type);
 	case PhysicalType::INT128:
 		return ConstantGetFunction<hugeint_t>(data_type);
+	case PhysicalType::INT256:
+		return ConstantGetFunction<int256_t>(data_type);
 	case PhysicalType::UINT128:
 		return ConstantGetFunction<uhugeint_t>(data_type);
 	case PhysicalType::FLOAT:
@@ -268,6 +271,7 @@ bool ConstantFun::TypeIsSupported(const PhysicalType physical_type) {
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
 	case PhysicalType::INT128:
+	case PhysicalType::INT256:
 	case PhysicalType::UINT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:

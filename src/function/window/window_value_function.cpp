@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/function/window/window_aggregator.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/function/window/window_index_tree.hpp"
@@ -641,6 +642,13 @@ double LossyFillCast(uhugeint_t val) {
 	return d;
 }
 
+template <>
+double LossyFillCast(int256_t val) {
+	double d;
+	(void)Int256::TryCast(val, d);
+	return d;
+}
+
 template <typename T>
 static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid) {
 	//	Cast everything to doubles immediately so we can interpolate backwards (x < x0)
@@ -681,6 +689,8 @@ static fill_slope_t GetFillSlopeFunction(const LogicalType &type) {
 		return FillSlopeFunc<int64_t>;
 	case PhysicalType::INT128:
 		return FillSlopeFunc<hugeint_t>;
+	case PhysicalType::INT256:
+		return FillSlopeFunc<int256_t>;
 	case PhysicalType::FLOAT:
 		return FillSlopeFunc<float>;
 	case PhysicalType::DOUBLE:
@@ -783,6 +793,7 @@ static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
 		return FillInterpolateFunc<float>;
 	case PhysicalType::DOUBLE:
 		return FillInterpolateFunc<double>;
+	// PhysicalType::INT256 intentionally omitted: FILL ... INTERPOLATE is not wired for int256.
 	default:
 		throw InternalException("Unsupported FILL interpolation type.");
 	}
@@ -831,6 +842,8 @@ static fill_value_t GetFillValueFunction(const LogicalType &type) {
 		return FillValueFunction<int64_t>;
 	case PhysicalType::INT128:
 		return FillValueFunction<hugeint_t>;
+	case PhysicalType::INT256:
+		return FillValueFunction<int256_t>;
 	case PhysicalType::FLOAT:
 		return FillValueFunction<float>;
 	case PhysicalType::DOUBLE:

@@ -30,6 +30,10 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 		case PhysicalType::INT128:
 			result = val.GetValueUnsafe<hugeint_t>();
 			break;
+		case PhysicalType::INT256: {
+			// int256_t values above hugeint_t range cannot use the perfect hash path
+			return false;
+		}
 		case PhysicalType::UINT8:
 			result = Hugeint::Convert(val.GetValueUnsafe<uint8_t>());
 			break;

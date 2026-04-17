@@ -9,6 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/int256.hpp"
 
 namespace duckdb {
 
@@ -25,6 +28,7 @@ struct NumericValueUnion {
 		uint64_t ubigint;
 		hugeint_t hugeint;
 		uhugeint_t uhugeint;
+		int256_t int256;
 		float float_;   // NOLINT
 		double double_; // NOLINT
 	} value_;           // NOLINT
@@ -66,6 +70,11 @@ DUCKDB_API inline hugeint_t &NumericValueUnion::GetReferenceUnsafe() {
 template <>
 DUCKDB_API inline uhugeint_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.uhugeint;
+}
+
+template <>
+DUCKDB_API inline int256_t &NumericValueUnion::GetReferenceUnsafe() {
+	return value_.int256;
 }
 
 template <>

@@ -1,0 +1,472 @@
+# name: test/sql/types/decimal/int256_boundary.test
+# description: Boundary / edge-case tests for DECIMAL(p>38) backed by PhysicalType::INT256.
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+# ---------------------------------------------------------------------------
+# DECIMAL(76,0) extremes: the largest positive value (76 nines) and its
+# negation should round-trip through VARCHAR.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0));
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+query I
+SELECT CAST('-9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0));
+----
+-9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+# VARCHAR round-trip
+query I
+SELECT CAST(CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)) AS VARCHAR);
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+query I
+SELECT CAST(CAST(CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)) AS VARCHAR) AS DECIMAL(76,0));
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+query I
+SELECT CAST(CAST(CAST('-9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)) AS VARCHAR) AS DECIMAL(76,0));
+----
+-9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+# Negating the maximum yields the minimum (symmetric range).
+query I
+SELECT -CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0));
+----
+-9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+# Double negation round-trips.
+query I
+SELECT -(-CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)));
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+# ---------------------------------------------------------------------------
+# DECIMAL(76,76): all-scale, -1 < v < 1.
+# DuckDB prints the leading zero as a bare '.'
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST('0.9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,76));
+----
+.9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+query I
+SELECT CAST('-0.9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,76));
+----
+-.9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+# VARCHAR round-trip of the scale-76 extreme.
+query I
+SELECT CAST(CAST(CAST('0.9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,76)) AS VARCHAR) AS DECIMAL(76,76));
+----
+.9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+# Zero at scale 76.
+query I
+SELECT CAST('0' AS DECIMAL(76,76));
+----
+.000000000000000000000000000000000000000000000000000000000000000000000000000
+
+# 1 cannot fit in DECIMAL(76,76) since every digit is fractional.
+statement error
+SELECT CAST('1' AS DECIMAL(76,76));
+----
+Conversion Error
+
+# ---------------------------------------------------------------------------
+# DECIMAL(76,0) + 1 overflows the target width.
+# ---------------------------------------------------------------------------
+
+statement error
+SELECT CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)) + 1;
+----
+
+statement error
+SELECT CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)) + CAST(1 AS DECIMAL(76,0));
+----
+
+# Subtracting from the minimum also overflows.
+statement error
+SELECT CAST('-9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)) - CAST(1 AS DECIMAL(76,0));
+----
+
+# ---------------------------------------------------------------------------
+# Mixed widths: INT64 + INT128 + INT256 decimal columns.
+# Join across them on equality, ORDER BY a mixed-width expression.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE mix64 (id INTEGER, v BIGINT);
+
+statement ok
+CREATE TABLE mix128 (id INTEGER, v DECIMAL(30,2));
+
+statement ok
+CREATE TABLE mix256 (id INTEGER, v DECIMAL(50,2));
+
+statement ok
+INSERT INTO mix64 VALUES (1, 100), (2, 200), (3, 300);
+
+statement ok
+INSERT INTO mix128 VALUES (1, 1000.50), (2, 2000.75), (3, 3000.25);
+
+statement ok
+INSERT INTO mix256 VALUES (1, 10000.25), (2, 20000.50), (3, 30000.75);
+
+# Join on integer id, selecting values of all three widths.
+query III
+SELECT mix64.v, mix128.v, mix256.v
+FROM mix64 JOIN mix128 USING(id) JOIN mix256 USING(id)
+ORDER BY mix64.id;
+----
+100	1000.50	10000.25
+200	2000.75	20000.50
+300	3000.25	30000.75
+
+# Adding all three widens the expression to DECIMAL(51,2).
+query I
+SELECT typeof(mix64.v + mix128.v + mix256.v)
+FROM mix64 JOIN mix128 USING(id) JOIN mix256 USING(id)
+LIMIT 1;
+----
+DECIMAL(51,2)
+
+# ORDER BY on the mixed-width expression.
+query I
+SELECT mix64.v + mix128.v + mix256.v
+FROM mix64 JOIN mix128 USING(id) JOIN mix256 USING(id)
+ORDER BY mix64.v + mix128.v + mix256.v;
+----
+11100.75
+22201.25
+33301.00
+
+# Join directly on a DECIMAL(INT256) equality.
+statement ok
+CREATE TABLE j1 (k DECIMAL(50,0), x INT);
+
+statement ok
+CREATE TABLE j2 (k DECIMAL(50,0), y INT);
+
+statement ok
+INSERT INTO j1 VALUES
+  (CAST('12345678901234567890123456789012345' AS DECIMAL(50,0)), 1),
+  (CAST('99999999999999999999999999999999999' AS DECIMAL(50,0)), 2);
+
+statement ok
+INSERT INTO j2 VALUES
+  (CAST('12345678901234567890123456789012345' AS DECIMAL(50,0)), 10),
+  (CAST('11111111111111111111111111111111111' AS DECIMAL(50,0)), 20);
+
+query III
+SELECT j1.k, j1.x, j2.y FROM j1 JOIN j2 USING(k) ORDER BY j1.k;
+----
+12345678901234567890123456789012345	1	10
+
+# ---------------------------------------------------------------------------
+# Scientific notation parsing.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST('1.5E40' AS DECIMAL(50,0));
+----
+15000000000000000000000000000000000000000
+
+query I
+SELECT CAST('-9.5E50' AS DECIMAL(60,5));
+----
+-950000000000000000000000000000000000000000000000000.00000
+
+query I
+SELECT CAST('1e60' AS DECIMAL(65,0));
+----
+1000000000000000000000000000000000000000000000000000000000000
+
+query I
+SELECT CAST('1.234E20' AS DECIMAL(50,10));
+----
+123400000000000000000.0000000000
+
+# Negative exponent.
+query I
+SELECT CAST('1.5E-3' AS DECIMAL(50,10));
+----
+0.0015000000
+
+query I
+SELECT CAST('1.5E-50' AS DECIMAL(60,55));
+----
+0.0000000000000000000000000000000000000000000000000150000
+
+# ---------------------------------------------------------------------------
+# Leading zeros, plus signs, leading/trailing whitespace.
+# DuckDB INT128 tolerates leading/trailing whitespace, leading zeros, and a
+# single leading '+'. Internal whitespace is rejected. INT256 mirrors that.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST('  00012345  ' AS DECIMAL(50,0));
+----
+12345
+
+query I
+SELECT CAST('+12345' AS DECIMAL(50,0));
+----
+12345
+
+query I
+SELECT CAST('00000.5' AS DECIMAL(50,2));
+----
+0.50
+
+query I
+SELECT CAST('  -000.5  ' AS DECIMAL(50,2));
+----
+-0.50
+
+# Internal whitespace should fail.
+statement error
+SELECT CAST('12 345' AS DECIMAL(50,0));
+----
+
+# Pre-existing DuckDB quirk (not specific to INT256): CAST (and TRY_CAST)
+# of pure-alphabetic garbage silently returns 0 rather than erroring.
+# INT128 behaves the same, so we just pin this behavior.
+query I
+SELECT CAST('not a number' AS DECIMAL(50,0));
+----
+0
+
+query I
+SELECT CAST('abc' AS DECIMAL(50,0));
+----
+0
+
+query I
+SELECT TRY_CAST('not a number' AS DECIMAL(50,0));
+----
+0
+
+# ---------------------------------------------------------------------------
+# NULL handling across every operator and aggregate.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE nn (a DECIMAL(50,2), b DECIMAL(50,2));
+
+statement ok
+INSERT INTO nn VALUES (NULL, NULL), (CAST(1 AS DECIMAL(50,2)), NULL), (NULL, CAST(2 AS DECIMAL(50,2))), (CAST(3 AS DECIMAL(50,2)), CAST(4 AS DECIMAL(50,2)));
+
+# Every binary arithmetic op returns NULL if either operand is NULL.
+query IIII
+SELECT a + b, a - b, a * b, a % b FROM nn ORDER BY a NULLS LAST, b NULLS LAST;
+----
+NULL	NULL	NULL	NULL
+7.00	-1.00	12.0000	3.00
+NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+
+# Comparisons return NULL when either operand is NULL.
+query I
+SELECT CAST(NULL AS DECIMAL(50,10)) = CAST(1 AS DECIMAL(50,10));
+----
+NULL
+
+query I
+SELECT CAST(NULL AS DECIMAL(50,10)) IS NULL;
+----
+true
+
+query I
+SELECT COALESCE(CAST(NULL AS DECIMAL(50,10)), CAST(42 AS DECIMAL(50,10)));
+----
+42.0000000000
+
+# Aggregates ignore NULLs; empty / all-NULL groups return NULL.
+query IIIIIII
+SELECT COUNT(*), COUNT(a), SUM(a), SUM(b), MIN(a), MAX(b), AVG(a) FROM nn;
+----
+4	2	4.00	6.00	1.00	4.00	2
+
+# All-NULL table.
+statement ok
+CREATE TABLE allnull (v DECIMAL(50,10));
+
+statement ok
+INSERT INTO allnull VALUES (NULL), (NULL), (NULL);
+
+query IIII
+SELECT COUNT(*), COUNT(v), SUM(v), AVG(v) FROM allnull;
+----
+3	0	NULL	NULL
+
+# COUNT DISTINCT treats NULL as a non-value.
+statement ok
+CREATE TABLE dd (v DECIMAL(50,10));
+
+statement ok
+INSERT INTO dd VALUES (NULL), (CAST(1.5 AS DECIMAL(50,10))), (CAST(1.5 AS DECIMAL(50,10))), (CAST(2.5 AS DECIMAL(50,10))), (NULL);
+
+query III
+SELECT COUNT(*), COUNT(v), COUNT(DISTINCT v) FROM dd;
+----
+5	3	2
+
+# ---------------------------------------------------------------------------
+# Boundary rounding: CAST(0.5 AS DECIMAL(50,0)) and friends.
+# DuckDB's convention is round-half-away-from-zero (same as INT128).
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST(0.5 AS DECIMAL(50,0));
+----
+1
+
+query I
+SELECT CAST(1.5 AS DECIMAL(50,0));
+----
+2
+
+query I
+SELECT CAST(2.5 AS DECIMAL(50,0));
+----
+3
+
+query I
+SELECT CAST(-0.5 AS DECIMAL(50,0));
+----
+-1
+
+query I
+SELECT CAST(-1.5 AS DECIMAL(50,0));
+----
+-2
+
+# Scale reduction also rounds half-away-from-zero.
+query I
+SELECT CAST(CAST('1.555' AS DECIMAL(50,3)) AS DECIMAL(50,2));
+----
+1.56
+
+query I
+SELECT CAST(CAST('-1.555' AS DECIMAL(50,3)) AS DECIMAL(50,2));
+----
+-1.56
+
+# ---------------------------------------------------------------------------
+# Division / modulo by zero return NULL (does NOT raise).
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST(10 AS DECIMAL(50,0)) / CAST(0 AS DECIMAL(50,0));
+----
+NULL
+
+query I
+SELECT CAST(10 AS DECIMAL(50,0)) % CAST(0 AS DECIMAL(50,0));
+----
+NULL
+
+# ---------------------------------------------------------------------------
+# ORDER BY + LIMIT + OFFSET on DECIMAL(INT256).
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE big_ord (v DECIMAL(50,10));
+
+statement ok
+INSERT INTO big_ord SELECT (i + 0.1)::DECIMAL(50,10) FROM range(1,11) t(i);
+
+query I
+SELECT v FROM big_ord ORDER BY v LIMIT 3 OFFSET 2;
+----
+3.1000000000
+4.1000000000
+5.1000000000
+
+query I
+SELECT v FROM big_ord ORDER BY v DESC LIMIT 3 OFFSET 2;
+----
+8.1000000000
+7.1000000000
+6.1000000000
+
+# Large-value ORDER BY.
+statement ok
+CREATE TABLE bigs (v DECIMAL(65,0));
+
+statement ok
+INSERT INTO bigs VALUES
+  (CAST('99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0))),
+  (CAST('0' AS DECIMAL(65,0))),
+  (CAST('-99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0))),
+  (CAST('12345678901234567890123456789012345' AS DECIMAL(65,0))),
+  (CAST('-12345678901234567890123456789012345' AS DECIMAL(65,0)));
+
+query I
+SELECT v FROM bigs ORDER BY v LIMIT 2 OFFSET 1;
+----
+-12345678901234567890123456789012345
+0
+
+query I
+SELECT v FROM bigs ORDER BY v DESC LIMIT 2 OFFSET 2;
+----
+0
+-12345678901234567890123456789012345
+
+# ---------------------------------------------------------------------------
+# Cross-width comparisons (INT128 vs INT256).
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST(1 AS DECIMAL(20,0)) = CAST(1 AS DECIMAL(50,0));
+----
+true
+
+query I
+SELECT CAST(1 AS DECIMAL(20,0)) < CAST(2 AS DECIMAL(50,0));
+----
+true
+
+# ---------------------------------------------------------------------------
+# Cleanup.
+# ---------------------------------------------------------------------------
+
+statement ok
+DROP TABLE mix64;
+
+statement ok
+DROP TABLE mix128;
+
+statement ok
+DROP TABLE mix256;
+
+statement ok
+DROP TABLE j1;
+
+statement ok
+DROP TABLE j2;
+
+statement ok
+DROP TABLE nn;
+
+statement ok
+DROP TABLE allnull;
+
+statement ok
+DROP TABLE dd;
+
+statement ok
+DROP TABLE big_ord;
+
+statement ok
+DROP TABLE bigs;

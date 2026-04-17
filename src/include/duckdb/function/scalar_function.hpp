@@ -284,6 +284,9 @@ public:
 		case LogicalTypeId::UHUGEINT:
 			function = &ScalarFunction::UnaryFunction<uhugeint_t, uhugeint_t, OP>;
 			break;
+		case LogicalTypeId::INT256:
+			function = &ScalarFunction::UnaryFunction<int256_t, int256_t, OP>;
+			break;
 		case LogicalTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, float, OP>;
 			break;

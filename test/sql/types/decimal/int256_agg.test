@@ -1,0 +1,223 @@
+# name: test/sql/types/decimal/int256_agg.test
+# description: Aggregates on DECIMAL(p>38) backed by PhysicalType::INT256.
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+# ---------------------------------------------------------------------------
+# SUM, MIN, MAX, AVG, COUNT, COUNT DISTINCT, FIRST, LAST on DECIMAL(50,10).
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE nums(v DECIMAL(50, 10));
+
+statement ok
+INSERT INTO nums SELECT (i + 0.1)::DECIMAL(50, 10) FROM generate_series(1, 10, 1) t(i);
+
+# SUM
+query I
+SELECT SUM(v) FROM nums;
+----
+56.0000000000
+
+# MIN / MAX
+query II
+SELECT MIN(v), MAX(v) FROM nums;
+----
+1.1000000000	10.1000000000
+
+# AVG (route through int256 accumulator + double divide)
+query I
+SELECT CAST(AVG(v) AS DECIMAL(30, 5)) FROM nums;
+----
+5.60000
+
+# COUNT / COUNT(DISTINCT)
+query II
+SELECT COUNT(v), COUNT(DISTINCT v) FROM nums;
+----
+10	10
+
+# FIRST / LAST with ORDER BY
+query II
+SELECT FIRST(v ORDER BY v), LAST(v ORDER BY v) FROM nums;
+----
+1.1000000000	10.1000000000
+
+# ANY_VALUE is non-deterministic, but should at least return one of the rows.
+query I
+SELECT ANY_VALUE(v) IN (1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1, 10.1) FROM nums;
+----
+true
+
+# ---------------------------------------------------------------------------
+# GROUP BY on an INT256-backed DECIMAL key.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE g(k DECIMAL(50, 2), v INT);
+
+statement ok
+INSERT INTO g VALUES (1.5, 1), (1.5, 2), (2.5, 3);
+
+query II
+SELECT k, COUNT(*) FROM g GROUP BY k ORDER BY k;
+----
+1.50	2
+2.50	1
+
+# ---------------------------------------------------------------------------
+# Window functions: SUM OVER, MIN/MAX OVER, ROW_NUMBER, LAG, LEAD.
+# ---------------------------------------------------------------------------
+
+query II
+SELECT v, SUM(v) OVER (ORDER BY v) FROM nums ORDER BY v;
+----
+1.1000000000	1.1000000000
+2.1000000000	3.2000000000
+3.1000000000	6.3000000000
+4.1000000000	10.4000000000
+5.1000000000	15.5000000000
+6.1000000000	21.6000000000
+7.1000000000	28.7000000000
+8.1000000000	36.8000000000
+9.1000000000	45.9000000000
+10.1000000000	56.0000000000
+
+query III
+SELECT v,
+       MIN(v) OVER (ORDER BY v ROWS BETWEEN 1 PRECEDING AND CURRENT ROW),
+       MAX(v) OVER (ORDER BY v ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
+FROM nums ORDER BY v;
+----
+1.1000000000	1.1000000000	1.1000000000
+2.1000000000	1.1000000000	2.1000000000
+3.1000000000	2.1000000000	3.1000000000
+4.1000000000	3.1000000000	4.1000000000
+5.1000000000	4.1000000000	5.1000000000
+6.1000000000	5.1000000000	6.1000000000
+7.1000000000	6.1000000000	7.1000000000
+8.1000000000	7.1000000000	8.1000000000
+9.1000000000	8.1000000000	9.1000000000
+10.1000000000	9.1000000000	10.1000000000
+
+query II
+SELECT v, ROW_NUMBER() OVER (ORDER BY v) FROM nums ORDER BY v;
+----
+1.1000000000	1
+2.1000000000	2
+3.1000000000	3
+4.1000000000	4
+5.1000000000	5
+6.1000000000	6
+7.1000000000	7
+8.1000000000	8
+9.1000000000	9
+10.1000000000	10
+
+query III
+SELECT v,
+       LAG(v) OVER (ORDER BY v),
+       LEAD(v) OVER (ORDER BY v)
+FROM nums ORDER BY v;
+----
+1.1000000000	NULL	2.1000000000
+2.1000000000	1.1000000000	3.1000000000
+3.1000000000	2.1000000000	4.1000000000
+4.1000000000	3.1000000000	5.1000000000
+5.1000000000	4.1000000000	6.1000000000
+6.1000000000	5.1000000000	7.1000000000
+7.1000000000	6.1000000000	8.1000000000
+8.1000000000	7.1000000000	9.1000000000
+9.1000000000	8.1000000000	10.1000000000
+10.1000000000	9.1000000000	NULL
+
+# ---------------------------------------------------------------------------
+# LIST aggregate on INT256-backed decimal.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT LIST(v ORDER BY v) FROM nums;
+----
+[1.1000000000, 2.1000000000, 3.1000000000, 4.1000000000, 5.1000000000, 6.1000000000, 7.1000000000, 8.1000000000, 9.1000000000, 10.1000000000]
+
+# ---------------------------------------------------------------------------
+# During the calculation process, the maximum allowed precision is 76 digits.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE big(v DECIMAL(65, 0));
+
+statement ok
+INSERT INTO big VALUES
+  (CAST('99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0))),
+  (CAST('1' AS DECIMAL(65,0)));
+
+query I
+SELECT SUM(v) FROM big;
+----
+100000000000000000000000000000000000000000000000000000000000000000
+
+query I
+SELECT v * 100000000000 FROM big;
+----
+9999999999999999999999999999999999999999999999999999999999999999900000000000
+100000000000
+
+# ---------------------------------------------------------------------------
+# NULL handling.
+# ---------------------------------------------------------------------------
+
+statement ok
+INSERT INTO nums VALUES (NULL);
+
+query II
+SELECT COUNT(*), COUNT(v) FROM nums;
+----
+11	10
+
+query I
+SELECT SUM(v) FROM nums;
+----
+56.0000000000
+
+query II
+SELECT MIN(v), MAX(v) FROM nums;
+----
+1.1000000000	10.1000000000
+
+# All-NULL sum returns NULL.
+statement ok
+CREATE TABLE nulls(v DECIMAL(50, 10));
+
+statement ok
+INSERT INTO nulls VALUES (NULL), (NULL);
+
+query III
+SELECT SUM(v), MIN(v), MAX(v) FROM nulls;
+----
+NULL	NULL	NULL
+
+# STDDEV / VAR: cast through double, should at least not crash.
+query II
+SELECT STDDEV_SAMP(v) IS NOT NULL, VAR_SAMP(v) IS NOT NULL FROM nums;
+----
+true	true
+
+# ---------------------------------------------------------------------------
+# Sum stays within INT256 when fed big values.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE big_ok(v DECIMAL(50, 0));
+
+statement ok
+INSERT INTO big_ok VALUES
+  (CAST('12345678901234567890123456789012345678901234567890' AS DECIMAL(50,0))),
+  (CAST('10000000000000000000000000000000000000000000000000' AS DECIMAL(50,0)));
+
+query I
+SELECT SUM(v) FROM big_ok;
+----
+22345678901234567890123456789012345678901234567890

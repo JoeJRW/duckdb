@@ -1,0 +1,402 @@
+# name: test/sql/types/decimal/int256_cast.test
+# description: Broad cast coverage for DECIMAL(p>38) backed by PhysicalType::INT256.
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+# ---------------------------------------------------------------------------
+# VARCHAR -> DECIMAL(65, 0) at the limits.
+# ---------------------------------------------------------------------------
+
+# Max value.
+query I
+SELECT CAST('99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0));
+----
+99999999999999999999999999999999999999999999999999999999999999999
+
+# Min value.
+query I
+SELECT CAST('-99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0));
+----
+-99999999999999999999999999999999999999999999999999999999999999999
+
+# Overflow: 66-digit input to DECIMAL(65,0).
+statement error
+SELECT CAST('999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0));
+----
+
+# Zero / small positives.
+query I
+SELECT CAST('0' AS DECIMAL(65,0));
+----
+0
+
+query I
+SELECT CAST('1' AS DECIMAL(65,0));
+----
+1
+
+# ---------------------------------------------------------------------------
+# VARCHAR -> DECIMAL(55, 10) with scale rounding.
+# ---------------------------------------------------------------------------
+
+# Already rounded.
+query I
+SELECT CAST('12345.6780000000' AS DECIMAL(55,10));
+----
+12345.6780000000
+
+# Longer input truncated-with-rounding to scale=10.
+query I
+SELECT CAST('12345.6789012345678' AS DECIMAL(55,10));
+----
+12345.6789012346
+
+# Round-half-away-from-zero on the boundary.
+query I
+SELECT CAST('1.55555' AS DECIMAL(55,4));
+----
+1.5556
+
+query I
+SELECT CAST('-1.55555' AS DECIMAL(55,4));
+----
+-1.5556
+
+# Truncation when scale is shorter than input (rounds toward even half-away-from-zero).
+query I
+SELECT CAST('1.2345678901234567890' AS DECIMAL(55,10));
+----
+1.2345678901
+
+# ---------------------------------------------------------------------------
+# DOUBLE <-> DECIMAL(60, 10).
+# DOUBLE has limited precision (~15-17 significant digits) so casting a
+# double to DECIMAL(60,10) only preserves the bits the double had.
+# ---------------------------------------------------------------------------
+
+# Small exact values round-trip.
+query I
+SELECT CAST(1.5::DOUBLE AS DECIMAL(60,10));
+----
+1.5000000000
+
+# 0.1 is representable in decimal but not exactly in binary float; we still
+# get 0.1 back at scale 10 because the extra mantissa noise is below 10^-10.
+query I
+SELECT CAST(0.1::DOUBLE AS DECIMAL(60,10));
+----
+0.1000000000
+
+# DECIMAL(INT256) -> DOUBLE: large magnitudes round to the nearest representable double.
+query I
+SELECT CAST(CAST('1.5' AS DECIMAL(60,10)) AS DOUBLE);
+----
+1.5
+
+query I
+SELECT CAST(CAST('99999999999999999999999999999999999999999999999999' AS DECIMAL(50,0)) AS DOUBLE);
+----
+1e+50
+
+# DECIMAL(65,65) max rounds up to 1.0 in double.
+query I
+SELECT CAST(CAST('0.99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,65)) AS DOUBLE);
+----
+1.0
+
+# DECIMAL(INT256) -> FLOAT.  Very large magnitudes overflow to inf.
+query I
+SELECT CAST(CAST('1.5' AS DECIMAL(50,2)) AS FLOAT);
+----
+1.5
+
+query I
+SELECT CAST(CAST('99999999999999999999999999999999999999999999999999' AS DECIMAL(50,0)) AS FLOAT);
+----
+inf
+
+# ---------------------------------------------------------------------------
+# BIGINT / HUGEINT / UHUGEINT -> DECIMAL(50, s).
+# ---------------------------------------------------------------------------
+
+# BIGINT max.
+query I
+SELECT CAST(9223372036854775807::BIGINT AS DECIMAL(50,5));
+----
+9223372036854775807.00000
+
+# BIGINT min (computed via expression to avoid literal parse issues).
+query I
+SELECT CAST((-9223372036854775807 - 1)::BIGINT AS DECIMAL(50,5));
+----
+-9223372036854775808.00000
+
+# HUGEINT max (INT128 positive limit).
+query I
+SELECT CAST(170141183460469231731687303715884105727::HUGEINT AS DECIMAL(50,0));
+----
+170141183460469231731687303715884105727
+
+# HUGEINT min.
+query I
+SELECT CAST((-170141183460469231731687303715884105727 - 1)::HUGEINT AS DECIMAL(50,0));
+----
+-170141183460469231731687303715884105728
+
+# UHUGEINT max (UINT128).
+query I
+SELECT CAST(340282366920938463463374607431768211455::UHUGEINT AS DECIMAL(50,0));
+----
+340282366920938463463374607431768211455
+
+# Small signed / unsigned integer types.
+query I
+SELECT CAST(42::INT AS DECIMAL(50,5));
+----
+42.00000
+
+query I
+SELECT CAST(42::SMALLINT AS DECIMAL(50,5));
+----
+42.00000
+
+query I
+SELECT CAST(42::TINYINT AS DECIMAL(50,5));
+----
+42.00000
+
+query I
+SELECT CAST(42::UTINYINT AS DECIMAL(50,5));
+----
+42.00000
+
+query I
+SELECT CAST(42::USMALLINT AS DECIMAL(50,5));
+----
+42.00000
+
+query I
+SELECT CAST(42::UINTEGER AS DECIMAL(50,5));
+----
+42.00000
+
+query I
+SELECT CAST(42::UBIGINT AS DECIMAL(50,5));
+----
+42.00000
+
+# ---------------------------------------------------------------------------
+# DECIMAL(INT128) -> DECIMAL(INT256) — scale up and scale down.
+# ---------------------------------------------------------------------------
+
+# Scale up: INT128 DECIMAL(30,2) -> INT256 DECIMAL(50,10).
+query I
+SELECT CAST(CAST('1.23' AS DECIMAL(30,2)) AS DECIMAL(50,10));
+----
+1.2300000000
+
+# Scale down: extra digits are rounded half-away-from-zero.
+query I
+SELECT CAST(CAST('1.23456789' AS DECIMAL(30,8)) AS DECIMAL(50,2));
+----
+1.23
+
+query I
+SELECT CAST(CAST('1.555' AS DECIMAL(30,3)) AS DECIMAL(50,2));
+----
+1.56
+
+query I
+SELECT CAST(CAST('-1.555' AS DECIMAL(30,3)) AS DECIMAL(50,2));
+----
+-1.56
+
+# INT128 DECIMAL(38,0) max (38 nines) -> INT256 round-trip.
+query I
+SELECT CAST(CAST('99999999999999999999999999999999999999' AS DECIMAL(38,0)) AS DECIMAL(50,0));
+----
+99999999999999999999999999999999999999
+
+# ---------------------------------------------------------------------------
+# DECIMAL(INT256) -> DECIMAL(INT128).
+# Value within INT128 range: succeeds.
+# Value outside INT128 range: errors.
+# ---------------------------------------------------------------------------
+
+# In range (exact value): succeeds.
+query I
+SELECT CAST(CAST('12345.67' AS DECIMAL(50,2)) AS DECIMAL(38,2));
+----
+12345.67
+
+# In range with scale-down rounding.
+query I
+SELECT CAST(CAST('12345.678' AS DECIMAL(50,3)) AS DECIMAL(38,2));
+----
+12345.68
+
+# Exactly 38 nines: still fits DECIMAL(38,0).
+query I
+SELECT CAST(CAST('99999999999999999999999999999999999999' AS DECIMAL(50,0)) AS DECIMAL(38,0));
+----
+99999999999999999999999999999999999999
+
+# Out of range (65 nines): errors.
+statement error
+SELECT CAST(CAST('99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0)) AS DECIMAL(38,0));
+----
+
+# 39 nines (just past the DECIMAL(38,0) limit): errors.
+statement error
+SELECT CAST(CAST('999999999999999999999999999999999999999' AS DECIMAL(50,0)) AS DECIMAL(38,0));
+----
+
+# TRY_CAST suppresses the error and returns NULL.
+query I
+SELECT TRY_CAST(CAST('99999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0)) AS DECIMAL(38,0));
+----
+NULL
+
+# ---------------------------------------------------------------------------
+# DECIMAL(INT256) -> VARCHAR round-trip.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST(CAST('12345678901234567890123456789012345.6789' AS DECIMAL(55,4)) AS VARCHAR);
+----
+12345678901234567890123456789012345.6789
+
+query I
+SELECT CAST(CAST(CAST('12345678901234567890123456789012345.6789' AS DECIMAL(55,4)) AS VARCHAR) AS DECIMAL(55,4));
+----
+12345678901234567890123456789012345.6789
+
+# Negative round-trip.
+query I
+SELECT CAST(CAST(CAST('-12345678901234567890123456789012345.6789' AS DECIMAL(55,4)) AS VARCHAR) AS DECIMAL(55,4));
+----
+-12345678901234567890123456789012345.6789
+
+# Scale-only round-trip (DECIMAL(65,65)).
+query I
+SELECT CAST(CAST('0.12345' AS DECIMAL(65,65)) AS VARCHAR);
+----
+.12345000000000000000000000000000000000000000000000000000000000000
+
+# ---------------------------------------------------------------------------
+# DECIMAL(INT256) -> integer types.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST(CAST('12345' AS DECIMAL(50,0)) AS INT);
+----
+12345
+
+query I
+SELECT CAST(CAST('12345' AS DECIMAL(50,0)) AS BIGINT);
+----
+12345
+
+# Scale is rounded half-away-from-zero when casting to an integer.
+query I
+SELECT CAST(CAST('12345.67' AS DECIMAL(50,2)) AS BIGINT);
+----
+12346
+
+query I
+SELECT CAST(CAST('12345' AS DECIMAL(50,0)) AS HUGEINT);
+----
+12345
+
+# INT128 positive limit via DECIMAL(INT256) -> HUGEINT.
+query I
+SELECT CAST(CAST('170141183460469231731687303715884105727' AS DECIMAL(50,0)) AS HUGEINT);
+----
+170141183460469231731687303715884105727
+
+# Overflow: too large for BIGINT.
+statement error
+SELECT CAST(CAST('99999999999999999999999999999999999999999999999999' AS DECIMAL(50,0)) AS BIGINT);
+----
+
+# TRY_CAST of the same returns NULL.
+query I
+SELECT TRY_CAST(CAST('99999999999999999999999999999999999999999999999999' AS DECIMAL(50,0)) AS BIGINT);
+----
+NULL
+
+# ---------------------------------------------------------------------------
+# CAST NULL AS DECIMAL(50, 10) = NULL.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST(NULL AS DECIMAL(50,10));
+----
+NULL
+
+query I
+SELECT CAST(NULL AS DECIMAL(50,10)) IS NULL;
+----
+true
+
+# ---------------------------------------------------------------------------
+# TRY_CAST of out-of-range VARCHAR -> DECIMAL(65,0) is NULL.
+# ---------------------------------------------------------------------------
+
+query I
+SELECT TRY_CAST('999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(65,0));
+----
+NULL
+
+query I
+SELECT TRY_CAST('1e100' AS DECIMAL(65,0));
+----
+NULL
+
+# TRY_CAST of a DOUBLE that's outside the DECIMAL range also returns NULL.
+query I
+SELECT TRY_CAST(1e100::DOUBLE AS DECIMAL(50,0));
+----
+NULL
+
+# TRY_CAST of NULL input is NULL.
+query I
+SELECT TRY_CAST(NULL AS DECIMAL(50,10));
+----
+NULL
+
+# ---------------------------------------------------------------------------
+# Numeric overflow when casting to DECIMAL(INT256).
+# ---------------------------------------------------------------------------
+
+# Width insufficient: DECIMAL(40,0) can hold 40 digits max; 41 digits overflows.
+statement error
+SELECT CAST('12345678901234567890123456789012345678901' AS DECIMAL(40,0));
+----
+
+# TRY_CAST of the same returns NULL.
+query I
+SELECT TRY_CAST('12345678901234567890123456789012345678901' AS DECIMAL(40,0));
+----
+NULL
+
+# DOUBLE overflow into DECIMAL(50,0).
+statement error
+SELECT CAST(1e100::DOUBLE AS DECIMAL(50,0));
+----
+
+# ---------------------------------------------------------------------------
+# Boolean casts (true/false round-trip through DECIMAL(INT256)).
+# ---------------------------------------------------------------------------
+
+query I
+SELECT CAST(true AS DECIMAL(50,5));
+----
+1.00000
+
+query I
+SELECT CAST(false AS DECIMAL(50,5));
+----
+0.00000

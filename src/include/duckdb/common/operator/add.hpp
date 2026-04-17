@@ -83,6 +83,8 @@ template <>
 bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
 template <>
 bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+template <>
+bool TryAddOperator::Operation(int256_t left, int256_t right, int256_t &result);
 
 struct AddOperatorOverflowCheck {
 	template <class TA, class TB, class TR>
@@ -111,6 +113,8 @@ template <>
 bool TryDecimalAdd::Operation(int64_t left, int64_t right, int64_t &result);
 template <>
 bool TryDecimalAdd::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+template <>
+bool TryDecimalAdd::Operation(int256_t left, int256_t right, int256_t &result);
 
 struct DecimalAddOverflowCheck {
 	template <class TA, class TB, class TR>
@@ -127,6 +131,9 @@ struct DecimalAddOverflowCheck {
 
 template <>
 hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint_t right);
+
+template <>
+int256_t DecimalAddOverflowCheck::Operation(int256_t left, int256_t right);
 
 struct AddTimeOperator {
 	template <class TA, class TB, class TR>

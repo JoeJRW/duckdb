@@ -1,4 +1,5 @@
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -122,6 +123,9 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, optional_ptr<
 	case PhysicalType::INT128:
 		return BinaryExecutor::Select<hugeint_t, hugeint_t, OP>(left, right, sel.get(), count, true_sel.get(),
 		                                                        false_sel.get());
+	case PhysicalType::INT256:
+		return BinaryExecutor::Select<int256_t, int256_t, OP>(left, right, sel.get(), count, true_sel.get(),
+		                                                      false_sel.get());
 	case PhysicalType::UINT128:
 		return BinaryExecutor::Select<uhugeint_t, uhugeint_t, OP>(left, right, sel.get(), count, true_sel.get(),
 		                                                          false_sel.get());

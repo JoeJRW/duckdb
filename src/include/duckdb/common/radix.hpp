@@ -15,6 +15,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/int256.hpp"
 
 #include <cfloat>
 #include <cstring> // strlen() on Solaris
@@ -225,6 +226,15 @@ inline void Radix::EncodeData(data_ptr_t dataptr, uhugeint_t value) {
 }
 
 template <>
+inline void Radix::EncodeData(data_ptr_t dataptr, int256_t value) {
+	// 32-byte big-endian encoding with sign bit flipped on the highest byte
+	EncodeData<int64_t>(dataptr, value.upper);
+	EncodeData<uint64_t>(dataptr + sizeof(int64_t), value.upper_middle);
+	EncodeData<uint64_t>(dataptr + sizeof(int64_t) + sizeof(uint64_t), value.lower_middle);
+	EncodeData<uint64_t>(dataptr + sizeof(int64_t) + sizeof(uint64_t) * 2, value.lower);
+}
+
+template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, float value) {
 	uint32_t converted_value = EncodeFloat(value);
 	Store<uint32_t>(BSwapIfLE(converted_value), dataptr);
@@ -314,6 +324,16 @@ inline uhugeint_t Radix::DecodeData(const_data_ptr_t input) {
 	uhugeint_t result;
 	result.upper = DecodeData<uint64_t>(input);
 	result.lower = DecodeData<uint64_t>(input + sizeof(uint64_t));
+	return result;
+}
+
+template <>
+inline int256_t Radix::DecodeData(const_data_ptr_t input) {
+	int256_t result;
+	result.upper = DecodeData<int64_t>(input);
+	result.upper_middle = DecodeData<uint64_t>(input + sizeof(int64_t));
+	result.lower_middle = DecodeData<uint64_t>(input + sizeof(int64_t) + sizeof(uint64_t));
+	result.lower = DecodeData<uint64_t>(input + sizeof(int64_t) + sizeof(uint64_t) * 2);
 	return result;
 }
 

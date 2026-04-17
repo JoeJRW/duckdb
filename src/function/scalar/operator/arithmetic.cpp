@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -41,6 +42,9 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 		break;
 	case PhysicalType::INT128:
 		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
+		break;
+	case PhysicalType::INT256:
+		function = &ScalarFunction::BinaryFunction<int256_t, int256_t, int256_t, OP>;
 		break;
 	case PhysicalType::UINT8:
 		function = &ScalarFunction::BinaryFunction<uint8_t, uint8_t, uint8_t, OP>;
@@ -221,6 +225,14 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(ClientContext &conte
 				required_width = Decimal::MAX_WIDTH_INT64;
 			}
 		}
+		if (required_width > Decimal::MAX_WIDTH_INT128 && max_width <= Decimal::MAX_WIDTH_INT128) {
+			// don't auto-promote across the INT128 -> INT256 boundary either (perf penalty);
+			// stay at INT128 and rely on overflow check
+			if (!ClientConfig::GetConfig(context).prefer_high_precision) {
+				bind_data->check_overflow = true;
+				required_width = Decimal::MAX_WIDTH_INT128;
+			}
+		}
 	}
 	if (required_width > Decimal::MAX_WIDTH_DECIMAL) {
 		// target width does not fit in decimal at all: truncate the scale and perform overflow detection
@@ -258,7 +270,8 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 	} else {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(result_type.InternalType()));
 	}
-	if (result_type.InternalType() != PhysicalType::INT128 && result_type.InternalType() != PhysicalType::UINT128) {
+	if (result_type.InternalType() != PhysicalType::INT128 && result_type.InternalType() != PhysicalType::UINT128 &&
+	    result_type.InternalType() != PhysicalType::INT256) {
 		if (IS_SUBTRACT) {
 			bound_function.SetStatisticsCallback(
 			    PropagateNumericStats<TryDecimalSubtract, SubtractPropagateStatistics, SubtractOperator>);
@@ -579,10 +592,13 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 	} else if (width <= Decimal::MAX_WIDTH_INT64) {
 		bound_function.SetFunctionCallback(
 		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::BIGINT));
-	} else {
-		D_ASSERT(width <= Decimal::MAX_WIDTH_INT128);
+	} else if (width <= Decimal::MAX_WIDTH_INT128) {
 		bound_function.SetFunctionCallback(
 		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT));
+	} else {
+		D_ASSERT(width <= Decimal::MAX_WIDTH_INT256);
+		bound_function.SetFunctionCallback(
+		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::INT256));
 	}
 	decimal_type.Verify();
 	bound_function.arguments[0] = decimal_type;
@@ -874,6 +890,14 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 			result_width = Decimal::MAX_WIDTH_INT64;
 		}
 	}
+	if (result_width > Decimal::MAX_WIDTH_INT128 && max_width <= Decimal::MAX_WIDTH_INT128 &&
+	    result_scale < Decimal::MAX_WIDTH_INT128) {
+		// don't auto-promote across the INT128 -> INT256 boundary
+		if (!ClientConfig::GetConfig(context).prefer_high_precision) {
+			bind_data->check_overflow = true;
+			result_width = Decimal::MAX_WIDTH_INT128;
+		}
+	}
 	if (result_width > Decimal::MAX_WIDTH_DECIMAL) {
 		bind_data->check_overflow = true;
 		result_width = Decimal::MAX_WIDTH_DECIMAL;
@@ -903,9 +927,9 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 	} else {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<MultiplyOperator>(result_type.InternalType()));
 	}
-	if (result_type.InternalType() != PhysicalType::INT128) {
-		bound_function.SetStatisticsCallback(
-		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>);
+	if (result_type.InternalType() != PhysicalType::INT128 && result_type.InternalType() != PhysicalType::INT256) {
+		bound_function.statistics =
+		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
 	}
 	return std::move(bind_data);
 }
@@ -971,6 +995,14 @@ hugeint_t DivideOperator::Operation(hugeint_t left, hugeint_t right) {
 		throw InternalException("Hugeint division by zero!");
 	}
 	return left / right;
+}
+
+template <>
+int256_t DivideOperator::Operation(int256_t left, int256_t right) {
+	if (right == int256_t(0)) {
+		throw InternalException("Int256 division by zero!");
+	}
+	return Int256::Divide<false>(left, right);
 }
 
 template <>
@@ -1063,6 +1095,8 @@ scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 		return BinaryScalarFunctionIgnoreZero<uint64_t, uint64_t, uint64_t, OP>;
 	case PhysicalType::INT128:
 		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP, BinaryNumericDivideHugeintWrapper>;
+	case PhysicalType::INT256:
+		return BinaryScalarFunctionIgnoreZero<int256_t, int256_t, int256_t, OP, BinaryNumericDivideHugeintWrapper>;
 	case PhysicalType::UINT128:
 		return BinaryScalarFunctionIgnoreZero<uhugeint_t, uhugeint_t, uhugeint_t, OP>;
 	case PhysicalType::FLOAT:
@@ -1086,9 +1120,274 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarF
 	return nullptr;
 }
 
+//===--------------------------------------------------------------------===//
+// Decimal divide helpers
+//===--------------------------------------------------------------------===//
+struct DecimalDivideBindData : public FunctionData {
+	uint8_t scale_factor;
+
+	DecimalDivideBindData() : scale_factor(0) {
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto res = make_uniq<DecimalDivideBindData>();
+		res->scale_factor = scale_factor;
+		return std::move(res);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		const auto &other = other_p.Cast<DecimalDivideBindData>();
+		return other.scale_factor == scale_factor;
+	}
+};
+
+// Long-division for int256 to avoid intermediate overflow
+static int256_t Int256ScaledDivide(int256_t left, int256_t right, uint8_t scale_factor) {
+	bool negative = (Int256::Sign(left) < 0) != (Int256::Sign(right) < 0);
+	int256_t abs_left = Int256::Abs(left);
+	int256_t abs_right = Int256::Abs(right);
+
+	int256_t quotient;
+	int256_t remainder;
+	Int256::TryDivMod(abs_left, abs_right, quotient, remainder);
+
+	// Scale up quotient and compute extra fractional digits
+	for (uint8_t i = 0; i < scale_factor; i++) {
+		quotient = Int256::Multiply(quotient, int256_t(10));
+		remainder = Int256::Multiply(remainder, int256_t(10));
+		int256_t digit;
+		Int256::TryDivMod(remainder, abs_right, digit, remainder);
+		quotient = Int256::Add(quotient, digit);
+	}
+
+	if (negative) {
+		Int256::NegateInPlace(quotient);
+	}
+	return quotient;
+}
+
+static void DecimalDivideInt16Function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_data = func_expr.bind_info->Cast<DecimalDivideBindData>();
+	int64_t factor = 1;
+	for (uint8_t i = 0; i < bind_data.scale_factor; i++) {
+		factor *= 10;
+	}
+	BinaryExecutor::ExecuteWithNulls<int16_t, int16_t, int16_t>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](int16_t left, int16_t right, ValidityMask &mask, idx_t idx) -> int16_t {
+		    if (right == 0) {
+			    mask.SetInvalid(idx);
+			    return 0;
+		    }
+		    int64_t scaled = int64_t(left) * factor;
+		    return int16_t(scaled / int64_t(right));
+	    });
+}
+
+static void DecimalDivideInt32Function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_data = func_expr.bind_info->Cast<DecimalDivideBindData>();
+	int64_t factor = 1;
+	for (uint8_t i = 0; i < bind_data.scale_factor; i++) {
+		factor *= 10;
+	}
+	BinaryExecutor::ExecuteWithNulls<int32_t, int32_t, int32_t>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](int32_t left, int32_t right, ValidityMask &mask, idx_t idx) -> int32_t {
+		    if (right == 0) {
+			    mask.SetInvalid(idx);
+			    return 0;
+		    }
+		    int64_t scaled = int64_t(left) * factor;
+		    return int32_t(scaled / int64_t(right));
+	    });
+}
+
+static void DecimalDivideInt64Function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_data = func_expr.bind_info->Cast<DecimalDivideBindData>();
+	hugeint_t factor = hugeint_t(1);
+	for (uint8_t i = 0; i < bind_data.scale_factor; i++) {
+		factor *= hugeint_t(10);
+	}
+	BinaryExecutor::ExecuteWithNulls<int64_t, int64_t, int64_t>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](int64_t left, int64_t right, ValidityMask &mask, idx_t idx) -> int64_t {
+		    if (right == 0) {
+			    mask.SetInvalid(idx);
+			    return 0;
+		    }
+		    hugeint_t scaled = Hugeint::Convert(left) * factor;
+		    return Hugeint::Cast<int64_t>(scaled / Hugeint::Convert(right));
+	    });
+}
+
+static void DecimalDivideHugeintFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_data = func_expr.bind_info->Cast<DecimalDivideBindData>();
+	uint8_t sf = bind_data.scale_factor;
+	BinaryExecutor::ExecuteWithNulls<hugeint_t, hugeint_t, hugeint_t>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](hugeint_t left, hugeint_t right, ValidityMask &mask, idx_t idx) -> hugeint_t {
+		    if (right == hugeint_t(0)) {
+			    mask.SetInvalid(idx);
+			    return hugeint_t(0);
+		    }
+		    int256_t left256, right256;
+		    Int256::TryConvert(left, left256);
+		    Int256::TryConvert(right, right256);
+		    int256_t result256 = Int256ScaledDivide(left256, right256, sf);
+		    hugeint_t res;
+		    if (!Int256::TryCast(result256, res)) {
+			    throw OutOfRangeException("Overflow in decimal division");
+		    }
+		    return res;
+	    });
+}
+
+static void DecimalDivideInt256Function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_data = func_expr.bind_info->Cast<DecimalDivideBindData>();
+	uint8_t sf = bind_data.scale_factor;
+
+	BinaryExecutor::ExecuteWithNulls<int256_t, int256_t, int256_t>(
+	    args.data[0], args.data[1], result, args.size(),
+	    [&](int256_t left, int256_t right, ValidityMask &mask, idx_t idx) -> int256_t {
+		    if (right == int256_t(0)) {
+			    mask.SetInvalid(idx);
+			    return int256_t(0);
+		    }
+		    return Int256ScaledDivide(left, right, sf);
+	    });
+}
+
+unique_ptr<FunctionData> BindDecimalDivide(ClientContext &context, ScalarFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = make_uniq<DecimalDivideBindData>();
+
+	// Get dividend and divisor decimal properties
+	uint8_t w1 = 0, s1 = 0, w2 = 0, s2 = 0;
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (arguments[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
+			continue;
+		}
+		uint8_t width, scale;
+		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		if (!can_convert) {
+			throw InternalException("Could not convert type %s to a decimal.", arguments[i]->return_type.ToString());
+		}
+		if (i == 0) {
+			w1 = width;
+			s1 = scale;
+		} else {
+			w2 = width;
+			s2 = scale;
+		}
+	}
+
+	// Compute result scale and width
+	uint8_t result_scale = MinValue<uint8_t>(NumericCast<uint8_t>(s1 + 4), 30);
+	// Max integer digits: dividend integer digits + divisor scale
+	uint8_t dividend_int_digits = NumericCast<uint8_t>(w1 - s1);
+	uint8_t result_int_digits = NumericCast<uint8_t>(dividend_int_digits + s2);
+	uint8_t result_width = NumericCast<uint8_t>(result_int_digits + result_scale);
+
+	// Cap at MAX_WIDTH_DECIMAL (76)
+	if (result_width > Decimal::MAX_WIDTH_DECIMAL) {
+		result_width = Decimal::MAX_WIDTH_DECIMAL;
+	}
+
+	// scale_factor: how many extra decimal digits we need beyond the dividend's original scale
+	uint8_t scale_factor = NumericCast<uint8_t>(result_scale - s1 + s2);
+	bind_data->scale_factor = scale_factor;
+
+	LogicalType result_type = LogicalType::DECIMAL(result_width, result_scale);
+
+	// Cast arguments to result's physical type but preserve their original scales
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		auto &argument_type = arguments[i]->return_type;
+		uint8_t width, scale;
+		if (!argument_type.GetDecimalProperties(width, scale)) {
+			scale = 0;
+		}
+		if (argument_type.InternalType() == result_type.InternalType()) {
+			bound_function.arguments[i] = argument_type;
+		} else {
+			bound_function.arguments[i] = LogicalType::DECIMAL(result_width, scale);
+		}
+	}
+
+	bound_function.return_type = result_type;
+
+	// Select execution function based on physical type
+	auto internal_type = result_type.InternalType();
+	if (internal_type == PhysicalType::INT256) {
+		bound_function.function = DecimalDivideInt256Function;
+	} else if (internal_type == PhysicalType::INT128) {
+		bound_function.function = DecimalDivideHugeintFunction;
+	} else if (internal_type == PhysicalType::INT64) {
+		bound_function.function = DecimalDivideInt64Function;
+	} else if (internal_type == PhysicalType::INT32) {
+		bound_function.function = DecimalDivideInt32Function;
+	} else if (internal_type == PhysicalType::INT16) {
+		bound_function.function = DecimalDivideInt16Function;
+	} else {
+		throw InternalException("Unsupported physical type for decimal division");
+	}
+
+	return std::move(bind_data);
+}
+
+void SerializeDecimalDivide(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                            const ScalarFunction &function) {
+	auto &bind_data = bind_data_p->Cast<DecimalDivideBindData>();
+	serializer.WriteProperty(100, "scale_factor", bind_data.scale_factor);
+	serializer.WriteProperty(101, "return_type", function.return_type);
+	serializer.WriteProperty(102, "arguments", function.arguments);
+}
+
+unique_ptr<FunctionData> DeserializeDecimalDivide(Deserializer &deserializer, ScalarFunction &bound_function) {
+	auto scale_factor = deserializer.ReadProperty<uint8_t>(100, "scale_factor");
+	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
+	auto arguments = deserializer.ReadProperty<vector<LogicalType>>(102, "arguments");
+
+	bound_function.return_type = return_type;
+	bound_function.arguments = arguments;
+
+	auto internal_type = return_type.InternalType();
+	if (internal_type == PhysicalType::INT256) {
+		bound_function.function = DecimalDivideInt256Function;
+	} else if (internal_type == PhysicalType::INT128) {
+		bound_function.function = DecimalDivideHugeintFunction;
+	} else if (internal_type == PhysicalType::INT64) {
+		bound_function.function = DecimalDivideInt64Function;
+	} else if (internal_type == PhysicalType::INT32) {
+		bound_function.function = DecimalDivideInt32Function;
+	} else if (internal_type == PhysicalType::INT16) {
+		bound_function.function = DecimalDivideInt16Function;
+	} else {
+		throw InternalException("Unsupported physical type for decimal division deserialization");
+	}
+
+	auto bind_data = make_uniq<DecimalDivideBindData>();
+	bind_data->scale_factor = scale_factor;
+	return std::move(bind_data);
+}
+
 } // namespace
 ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	ScalarFunctionSet fp_divide("/");
+	// Decimal division: DECIMAL / DECIMAL -> DECIMAL
+	for (auto &type : LogicalType::Numeric()) {
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			ScalarFunction function({type, type}, type, nullptr, BindDecimalDivide);
+			function.serialize = SerializeDecimalDivide;
+			function.deserialize = DeserializeDecimalDivide;
+			ScalarFunction::SetReturnsError(function);
+			fp_divide.AddFunction(function);
+		}
+	}
 	fp_divide.AddFunction(ScalarFunction({LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT, nullptr,
 	                                     BindBinaryFloatingPoint<DivideOperator>));
 	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
@@ -1164,6 +1463,14 @@ hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
 	return left % right;
 }
 
+template <>
+int256_t ModuloOperator::Operation(int256_t left, int256_t right) {
+	if (right == int256_t(0)) {
+		throw InternalException("Int256 division by zero!");
+	}
+	return Int256::Modulo<false>(left, right);
+}
+
 ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 	ScalarFunctionSet modulo("%");
 	for (auto &type : LogicalType::Numeric()) {
@@ -1205,6 +1512,19 @@ timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d
 template <>
 hugeint_t InterpolateOperator::Operation(const hugeint_t &lo, const double d, const hugeint_t &hi) {
 	return Hugeint::Convert(Operation(Hugeint::Cast<double>(lo), d, Hugeint::Cast<double>(hi)));
+}
+
+template <>
+int256_t InterpolateOperator::Operation(const int256_t &lo, const double d, const int256_t &hi) {
+	double lo_d = 0;
+	double hi_d = 0;
+	Int256::TryCast(lo, lo_d);
+	Int256::TryCast(hi, hi_d);
+	int256_t result;
+	if (!Int256::TryConvert(Operation(lo_d, d, hi_d), result)) {
+		throw OutOfRangeException("Overflow in INT256 interpolation");
+	}
+	return result;
 }
 
 template <>

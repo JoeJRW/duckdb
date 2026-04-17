@@ -1,4 +1,5 @@
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -56,6 +57,9 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 	case PhysicalType::INT128:
 		return TernaryExecutor::Select<hugeint_t, hugeint_t, hugeint_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                                    false_sel);
+	case PhysicalType::INT256:
+		return TernaryExecutor::Select<int256_t, int256_t, int256_t, OP>(input, lower, upper, sel, count, true_sel,
+		                                                                 false_sel);
 	case PhysicalType::UINT8:
 		return TernaryExecutor::Select<uint8_t, uint8_t, uint8_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                              false_sel);

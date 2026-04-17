@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -68,17 +69,20 @@ static Value NegatePercentileValue(const Value &v, const bool desc) {
 	case LogicalTypeId::DECIMAL: {
 		// Negate DECIMALs as DECIMAL.
 		const auto integral = IntegralValue::Get(v);
+		const auto negated = -integral;
 		const auto width = DecimalType::GetWidth(type);
 		const auto scale = DecimalType::GetScale(type);
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return Value::DECIMAL(Cast::Operation<hugeint_t, int16_t>(-integral), width, scale);
+			return Value::DECIMAL(Cast::Operation<int256_t, int16_t>(negated), width, scale);
 		case PhysicalType::INT32:
-			return Value::DECIMAL(Cast::Operation<hugeint_t, int32_t>(-integral), width, scale);
+			return Value::DECIMAL(Cast::Operation<int256_t, int32_t>(negated), width, scale);
 		case PhysicalType::INT64:
-			return Value::DECIMAL(Cast::Operation<hugeint_t, int64_t>(-integral), width, scale);
+			return Value::DECIMAL(Cast::Operation<int256_t, int64_t>(negated), width, scale);
 		case PhysicalType::INT128:
-			return Value::DECIMAL(-integral, width, scale);
+			return Value::DECIMAL(Cast::Operation<int256_t, hugeint_t>(negated), width, scale);
+		case PhysicalType::INT256:
+			return Value::DECIMAL(negated, width, scale);
 		default:
 			throw InternalException("Unknown DECIMAL type");
 		}

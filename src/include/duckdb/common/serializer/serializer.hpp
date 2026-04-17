@@ -14,6 +14,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/queue.hpp"
@@ -359,6 +360,13 @@ protected:
 	virtual void WriteValue(int64_t value) = 0;
 	virtual void WriteValue(hugeint_t value) = 0;
 	virtual void WriteValue(uhugeint_t value) = 0;
+	// Non-virtual: write int256_t as 4 uint64_t limbs (lower, lower_middle, upper_middle, upper)
+	void WriteValue(int256_t value) {
+		WriteValue(value.lower);
+		WriteValue(value.lower_middle);
+		WriteValue(value.upper_middle);
+		WriteValue(static_cast<uint64_t>(value.upper));
+	}
 	virtual void WriteValue(float value) = 0;
 	virtual void WriteValue(double value) = 0;
 	virtual void WriteValue(const string_t value) = 0;

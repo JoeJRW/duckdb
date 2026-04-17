@@ -65,6 +65,8 @@ template <>
 DUCKDB_API bool TryMultiplyOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
 template <>
 DUCKDB_API bool TryMultiplyOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
+template <>
+DUCKDB_API bool TryMultiplyOperator::Operation(int256_t left, int256_t right, int256_t &result);
 
 template <>
 bool TryMultiplyOperator::Operation(interval_t left, double right, interval_t &result);
@@ -96,6 +98,8 @@ template <>
 bool TryDecimalMultiply::Operation(int64_t left, int64_t right, int64_t &result);
 template <>
 bool TryDecimalMultiply::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+template <>
+bool TryDecimalMultiply::Operation(int256_t left, int256_t right, int256_t &result);
 
 struct DecimalMultiplyOverflowCheck {
 	template <class TA, class TB, class TR>
@@ -112,5 +116,8 @@ struct DecimalMultiplyOverflowCheck {
 
 template <>
 hugeint_t DecimalMultiplyOverflowCheck::Operation(hugeint_t left, hugeint_t right);
+
+template <>
+int256_t DecimalMultiplyOverflowCheck::Operation(int256_t left, int256_t right);
 
 } // namespace duckdb

@@ -15,6 +15,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "fmt/format.h"
 
@@ -95,6 +96,9 @@ template <>
 int NumericHelper::UnsignedLength(hugeint_t value);
 
 template <>
+int NumericHelper::UnsignedLength(int256_t value);
+
+template <>
 char *NumericHelper::FormatUnsigned(hugeint_t value, char *ptr);
 
 template <>
@@ -102,6 +106,9 @@ std::string NumericHelper::ToString(hugeint_t value);
 
 template <>
 std::string NumericHelper::ToString(uhugeint_t value);
+
+template <>
+std::string NumericHelper::ToString(int256_t value);
 
 template <>
 string_t NumericHelper::FormatSigned(hugeint_t value, Vector &vector);
@@ -178,6 +185,15 @@ string_t DecimalToString::Format(hugeint_t value, uint8_t width, uint8_t scale, 
 
 template <>
 void DecimalToString::FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, char *dst, idx_t len);
+
+template <>
+int DecimalToString::DecimalLength(int256_t value, uint8_t width, uint8_t scale);
+
+template <>
+string_t DecimalToString::Format(int256_t value, uint8_t width, uint8_t scale, Vector &vector);
+
+template <>
+void DecimalToString::FormatDecimal(int256_t value, uint8_t width, uint8_t scale, char *dst, idx_t len);
 
 struct UhugeintToStringCast {
 	static string_t Format(uhugeint_t value, Vector &vector) {

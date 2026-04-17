@@ -1,6 +1,8 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/int256.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -209,6 +211,11 @@ std::string NumericHelper::ToString(uhugeint_t value) {
 }
 
 template <>
+std::string NumericHelper::ToString(int256_t value) {
+	return Int256::ToString(value);
+}
+
+template <>
 int DecimalToString::DecimalLength(hugeint_t value, uint8_t width, uint8_t scale) {
 	D_ASSERT(value > NumericLimits<hugeint_t>::Minimum());
 	int negative;
@@ -304,6 +311,100 @@ void DecimalToString::FormatDecimal(hugeint_t value, uint8_t width, uint8_t scal
 	}
 	*--dst = '.';
 	// now write the part before the decimal
+	D_ASSERT(width > scale || major == 0);
+	if (width > scale) {
+		dst = NumericHelper::FormatUnsigned(major, dst);
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// int256_t  (backs DECIMAL with precision > 38)
+//===--------------------------------------------------------------------===//
+template <>
+int NumericHelper::UnsignedLength(int256_t value) {
+	D_ASSERT(value.upper >= 0);
+	// Signed int256 max is ~5.79e76, i.e. 77 decimal digits. POWERS_OF_TEN[77] wraps modulo 2^256
+	// (stored negative), so we must skip it in the comparison — otherwise a non-negative `value`
+	// would appear smaller than it and we'd return 78 for every input.
+	// Walk from 10^76 downward; the result is `len + 1` when value >= 10^len.
+	for (int len = Int256::CACHED_POWERS_OF_TEN - 2; len > 0; len--) {
+		if (!(value < Int256::POWERS_OF_TEN[len])) {
+			return len + 1;
+		}
+	}
+	return 1;
+}
+
+template <>
+char *NumericHelper::FormatUnsigned(int256_t value, char *ptr) {
+	// format by repeatedly dividing out chunks of 10^18 (largest power of ten that fits in uint64)
+	// and formatting each chunk. Drive the loop off magnitude rather than via comparison on every
+	// limb so we only do a full 256-bit division when we actually need one.
+	while (value.upper != 0 || value.upper_middle != 0 || value.lower_middle != 0) {
+		uint64_t remainder;
+		value = Int256::DivModPositive(value, 1000000000000000000ULL, remainder);
+
+		auto startptr = ptr;
+		ptr = NumericHelper::FormatUnsigned<uint64_t>(remainder, ptr);
+
+		int format_length = UnsafeNumericCast<int>(startptr - ptr);
+		for (int i = format_length; i < 18; i++) {
+			*--ptr = '0';
+		}
+	}
+	return NumericHelper::FormatUnsigned<uint64_t>(value.lower, ptr);
+}
+
+template <>
+int DecimalToString::DecimalLength(int256_t value, uint8_t width, uint8_t scale) {
+	D_ASSERT(value > NumericLimits<int256_t>::Minimum());
+	int negative;
+	if (value.upper < 0) {
+		Int256::NegateInPlace(value);
+		negative = 1;
+	} else {
+		negative = 0;
+	}
+	if (scale == 0) {
+		return NumericHelper::UnsignedLength(value) + negative;
+	}
+	auto extra_numbers = width > scale ? 2 : 1;
+	return MaxValue(scale + extra_numbers, NumericHelper::UnsignedLength(value) + 1) + negative;
+}
+
+template <>
+string_t DecimalToString::Format(int256_t value, uint8_t width, uint8_t scale, Vector &vector) {
+	int length = DecimalLength(value, width, scale);
+	string_t result = StringVector::EmptyString(vector, NumericCast<idx_t>(length));
+	auto dst = result.GetDataWriteable();
+	FormatDecimal(value, width, scale, dst, NumericCast<idx_t>(length));
+	result.Finalize();
+	return result;
+}
+
+template <>
+void DecimalToString::FormatDecimal(int256_t value, uint8_t width, uint8_t scale, char *dst, idx_t len) {
+	auto endptr = dst + len;
+
+	int negative = value.upper < 0;
+	if (negative) {
+		Int256::NegateInPlace(value);
+		*dst = '-';
+		dst++;
+	}
+	if (scale == 0) {
+		NumericHelper::FormatUnsigned(value, endptr);
+		return;
+	}
+
+	int256_t minor;
+	int256_t major = Int256::DivMod(value, Int256::POWERS_OF_TEN[scale], minor);
+
+	dst = NumericHelper::FormatUnsigned(minor, endptr);
+	while (dst > (endptr - scale)) {
+		*--dst = '0';
+	}
+	*--dst = '.';
 	D_ASSERT(width > scale || major == 0);
 	if (width > scale) {
 		dst = NumericHelper::FormatUnsigned(major, dst);

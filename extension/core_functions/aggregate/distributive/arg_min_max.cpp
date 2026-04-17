@@ -475,6 +475,8 @@ AggregateFunction GetArgMinMaxFunctionBy(const LogicalType &by_type, const Logic
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int64_t>(by_type, type, null_handling);
 	case PhysicalType::INT128:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, hugeint_t>(by_type, type, null_handling);
+	case PhysicalType::INT256:
+		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, int256_t>(by_type, type, null_handling);
 	case PhysicalType::DOUBLE:
 		return GetArgMinMaxFunctionInternal<OP, ARG_TYPE, double>(by_type, type, null_handling);
 	case PhysicalType::VARCHAR:
@@ -509,8 +511,10 @@ AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const 
 		return GetArgMinMaxFunctionBy<OP, int32_t>(by_type, type, null_handling);
 	case PhysicalType::INT64:
 		return GetArgMinMaxFunctionBy<OP, int64_t>(by_type, type, null_handling);
-	default:
+	case PhysicalType::INT128:
 		return GetArgMinMaxFunctionBy<OP, hugeint_t>(by_type, type, null_handling);
+	default:
+		return GetArgMinMaxFunctionBy<OP, int256_t>(by_type, type, null_handling);
 	}
 #else
 	return GetArgMinMaxFunctionInternal<OP, string_t, string_t>(by_type, type, null_handling);

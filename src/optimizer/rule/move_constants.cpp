@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/rule/move_constants.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -48,8 +50,8 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		return make_uniq<BoundConstantExpression>(Value(comparison.return_type));
 	}
 	auto &constant_type = outer_constant.return_type;
-	hugeint_t outer_value = IntegralValue::Get(outer_constant.value);
-	hugeint_t inner_value = IntegralValue::Get(inner_constant.value);
+	hugeint_t outer_value = Cast::Operation<int256_t, hugeint_t>(IntegralValue::Get(outer_constant.value));
+	hugeint_t inner_value = Cast::Operation<int256_t, hugeint_t>(IntegralValue::Get(inner_constant.value));
 
 	idx_t arithmetic_child_index = arithmetic.children[0].get() == &inner_constant ? 1 : 0;
 	auto &op_type = arithmetic.function.name;

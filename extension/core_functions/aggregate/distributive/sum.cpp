@@ -73,6 +73,40 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd
 	}
 };
 
+struct Int256SumOperation : public BaseSumOperation<SumSetOperation, Int256Add> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+};
+
+// SUM operations that accumulate smaller types into int256 for wider decimal results
+struct SmallIntToInt256SumOperation : public BaseSumOperation<SumSetOperation, Int256Add> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+};
+
+struct HugeintToInt256SumOperation : public BaseSumOperation<SumSetOperation, HugeintToInt256Add> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+};
+
 unique_ptr<FunctionData> SumNoOverflowBind(ClientContext &context, AggregateFunction &function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	throw BinderException("sum_no_overflow is for internal use only!");
@@ -196,19 +230,79 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return function;
 	}
+	case PhysicalType::INT256: {
+		// SUM(DECIMAL with width > 38) accumulates in int256 with overflow check.
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<int256_t>, int256_t, int256_t, Int256SumOperation>(
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0),
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0));
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
 	default:
 		throw InternalException("Unimplemented sum aggregate");
+	}
+}
+
+// Get a decimal SUM aggregate that always accumulates in int256 for maximum precision
+AggregateFunction GetDecimalSumInt256Aggregate(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::INT16: {
+		// int16 input -> int256 accumulator (implicit conversion via int64_t constructor)
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<int256_t>, int16_t, int256_t, SmallIntToInt256SumOperation>(
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT16, 0),
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0));
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
+	case PhysicalType::INT32: {
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<int256_t>, int32_t, int256_t, SmallIntToInt256SumOperation>(
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT32, 0),
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0));
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
+	case PhysicalType::INT64: {
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<int256_t>, int64_t, int256_t, SmallIntToInt256SumOperation>(
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT64, 0),
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0));
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
+	case PhysicalType::INT128: {
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<int256_t>, hugeint_t, int256_t, HugeintToInt256SumOperation>(
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT128, 0),
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0));
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
+	case PhysicalType::INT256: {
+		auto function =
+		    AggregateFunction::UnaryAggregate<SumState<int256_t>, int256_t, int256_t, Int256SumOperation>(
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0),
+		        LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, 0));
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
+	default:
+		throw InternalException("Unimplemented decimal sum aggregate");
 	}
 }
 
 unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunction &function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	function = GetSumAggregate(decimal_type.InternalType());
+	// Always use int256 accumulator for all decimal SUMs for maximum precision
+	function = GetDecimalSumInt256Aggregate(decimal_type.InternalType());
 	function.name = "sum";
 	function.arguments[0] = decimal_type;
-	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
-	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	const auto scale = DecimalType::GetScale(decimal_type);
+	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_INT256, scale);
+	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return nullptr;
 }
 

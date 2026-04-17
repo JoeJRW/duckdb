@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/config.hpp"
@@ -506,6 +507,12 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 			auto predicate = HugeIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<hugeint_t>(vdata, predicate, sel, approved_tuple_count,
 			                                 constant_filter.comparison_type);
+			break;
+		}
+		case PhysicalType::INT256: {
+			auto predicate = Int256Value::Get(constant_filter.constant);
+			FilterSelectionSwitch<int256_t>(vdata, predicate, sel, approved_tuple_count,
+			                                constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::UINT128: {

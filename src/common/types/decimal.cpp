@@ -4,6 +4,7 @@
 
 namespace duckdb {
 constexpr uint8_t Decimal::MAX_WIDTH_DECIMAL;
+constexpr uint8_t Decimal::MAX_WIDTH_INT256;
 
 template <class SIGNED>
 string TemplatedDecimalToString(SIGNED value, uint8_t width, uint8_t scale) {
@@ -26,6 +27,13 @@ string Decimal::ToString(int64_t value, uint8_t width, uint8_t scale) {
 }
 
 string Decimal::ToString(hugeint_t value, uint8_t width, uint8_t scale) {
+	auto len = DecimalToString::DecimalLength(value, width, scale);
+	auto data = make_unsafe_uniq_array_uninitialized<char>(UnsafeNumericCast<size_t>(len + 1));
+	DecimalToString::FormatDecimal(value, width, scale, data.get(), UnsafeNumericCast<idx_t>(len));
+	return string(data.get(), UnsafeNumericCast<uint32_t>(len));
+}
+
+string Decimal::ToString(int256_t value, uint8_t width, uint8_t scale) {
 	auto len = DecimalToString::DecimalLength(value, width, scale);
 	auto data = make_unsafe_uniq_array_uninitialized<char>(UnsafeNumericCast<size_t>(len + 1));
 	DecimalToString::FormatDecimal(value, width, scale, data.get(), UnsafeNumericCast<idx_t>(len));

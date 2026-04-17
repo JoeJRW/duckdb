@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/common/int256.hpp"
 
 namespace duckdb {
 
@@ -428,6 +429,9 @@ void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 	case PhysicalType::INT128:
 		TemplatedGetSortKeyLength<SortKeyConstantOperator<hugeint_t>>(vector_data, chunk, result);
 		break;
+	case PhysicalType::INT256:
+		TemplatedGetSortKeyLength<SortKeyConstantOperator<int256_t>>(vector_data, chunk, result);
+		break;
 	case PhysicalType::VARCHAR:
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
 			TemplatedGetSortKeyLength<SortKeyVarcharOperator>(vector_data, chunk, result);
@@ -639,6 +643,9 @@ void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 		break;
 	case PhysicalType::INT128:
 		TemplatedConstructSortKey<SortKeyConstantOperator<hugeint_t>>(vector_data, chunk, info);
+		break;
+	case PhysicalType::INT256:
+		TemplatedConstructSortKey<SortKeyConstantOperator<int256_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::VARCHAR:
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
@@ -1130,6 +1137,10 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 	case PhysicalType::INT128:
 		TemplatedDecodeSortKey<SortKeyConstantOperator<hugeint_t>>(decode_data, vector_data, result, result_offset,
 		                                                           count);
+		break;
+	case PhysicalType::INT256:
+		TemplatedDecodeSortKey<SortKeyConstantOperator<int256_t>>(decode_data, vector_data, result, result_offset,
+		                                                          count);
 		break;
 	case PhysicalType::VARCHAR:
 		if (result.GetType().id() == LogicalTypeId::VARCHAR) {

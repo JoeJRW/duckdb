@@ -110,6 +110,8 @@ PhysicalType LogicalType::GetInternalType() {
 			return PhysicalType::INT64;
 		} else if (width <= Decimal::MAX_WIDTH_INT128) {
 			return PhysicalType::INT128;
+		} else if (width <= Decimal::MAX_WIDTH_INT256) {
+			return PhysicalType::INT256;
 		} else {
 			throw InternalException("Decimal has a width of %d which is bigger than the maximum supported width of %d",
 			                        width, DecimalType::MaxWidth());
@@ -167,6 +169,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::GEOMETRY:
 		return PhysicalType::VARCHAR;
+	case LogicalTypeId::INT256:
+		return PhysicalType::INT256;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -224,6 +228,8 @@ constexpr const LogicalTypeId LogicalType::TABLE;
 constexpr const LogicalTypeId LogicalType::LAMBDA;
 
 constexpr const LogicalTypeId LogicalType::ANY;
+
+constexpr const LogicalTypeId LogicalType::INT256;
 
 const vector<LogicalType> LogicalType::Numeric() {
 	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
@@ -293,6 +299,8 @@ string TypeIdToString(PhysicalType type) {
 		return "INT128";
 	case PhysicalType::UINT128:
 		return "UINT128";
+	case PhysicalType::INT256:
+		return "INT256";
 	case PhysicalType::FLOAT:
 		return "FLOAT";
 	case PhysicalType::DOUBLE:
@@ -343,6 +351,8 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(hugeint_t);
 	case PhysicalType::UINT128:
 		return sizeof(uhugeint_t);
+	case PhysicalType::INT256:
+		return sizeof(int256_t);
 	case PhysicalType::FLOAT:
 		return sizeof(float);
 	case PhysicalType::DOUBLE:
@@ -364,19 +374,19 @@ idx_t GetTypeIdSize(PhysicalType type) {
 
 bool TypeIsConstantSize(PhysicalType type) {
 	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) || type == PhysicalType::INTERVAL ||
-	       type == PhysicalType::INT128 || type == PhysicalType::UINT128;
+	       type == PhysicalType::INT128 || type == PhysicalType::UINT128 || type == PhysicalType::INT256;
 }
 bool TypeIsIntegral(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 ||
-	       type == PhysicalType::UINT128;
+	       type == PhysicalType::UINT128 || type == PhysicalType::INT256;
 }
 bool TypeIsNumeric(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128 ||
-	       type == PhysicalType::UINT128;
+	       type == PhysicalType::UINT128 || type == PhysicalType::INT256;
 }
 bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 ||
-	       type == PhysicalType::UINT128;
+	       type == PhysicalType::UINT128 || type == PhysicalType::INT256;
 }
 
 static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_list) {
@@ -1510,7 +1520,7 @@ uint8_t DecimalType::GetScale(const LogicalType &type) {
 }
 
 uint8_t DecimalType::MaxWidth() {
-	return DecimalWidth<hugeint_t>::max;
+	return DecimalWidth<int256_t>::max;
 }
 
 LogicalType LogicalType::DECIMAL(uint8_t width, uint8_t scale) {

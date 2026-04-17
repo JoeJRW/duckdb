@@ -38,6 +38,7 @@ FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
 	case PhysicalType::INT128:
+	case PhysicalType::INT256:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		return NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,

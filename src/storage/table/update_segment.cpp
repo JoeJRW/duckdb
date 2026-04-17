@@ -5,6 +5,9 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/transaction/undo_buffer.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/int256.hpp"
 
 #include <algorithm>
 
@@ -186,6 +189,8 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 		return UpdateMergeFetch<uint64_t>;
 	case PhysicalType::INT128:
 		return UpdateMergeFetch<hugeint_t>;
+	case PhysicalType::INT256:
+		return UpdateMergeFetch<int256_t>;
 	case PhysicalType::UINT128:
 		return UpdateMergeFetch<uhugeint_t>;
 	case PhysicalType::FLOAT:
@@ -266,6 +271,8 @@ static UpdateSegment::fetch_committed_function_t GetFetchCommittedFunction(Physi
 		return TemplatedFetchCommitted<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchCommitted<hugeint_t>;
+	case PhysicalType::INT256:
+		return TemplatedFetchCommitted<int256_t>;
 	case PhysicalType::UINT128:
 		return TemplatedFetchCommitted<uhugeint_t>;
 	case PhysicalType::FLOAT:
@@ -363,6 +370,8 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 		return TemplatedFetchCommittedRange<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchCommittedRange<hugeint_t>;
+	case PhysicalType::INT256:
+		return TemplatedFetchCommittedRange<int256_t>;
 	case PhysicalType::UINT128:
 		return TemplatedFetchCommittedRange<uhugeint_t>;
 	case PhysicalType::FLOAT:
@@ -472,6 +481,8 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 		return TemplatedFetchRow<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedFetchRow<hugeint_t>;
+	case PhysicalType::INT256:
+		return TemplatedFetchRow<int256_t>;
 	case PhysicalType::UINT128:
 		return TemplatedFetchRow<uhugeint_t>;
 	case PhysicalType::FLOAT:
@@ -546,6 +557,8 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 		return RollbackUpdate<uint64_t>;
 	case PhysicalType::INT128:
 		return RollbackUpdate<hugeint_t>;
+	case PhysicalType::INT256:
+		return RollbackUpdate<int256_t>;
 	case PhysicalType::UINT128:
 		return RollbackUpdate<uhugeint_t>;
 	case PhysicalType::FLOAT:
@@ -749,6 +762,8 @@ static UpdateSegment::initialize_update_function_t GetInitializeUpdateFunction(P
 		return InitializeUpdateData<uint64_t>;
 	case PhysicalType::INT128:
 		return InitializeUpdateData<hugeint_t>;
+	case PhysicalType::INT256:
+		return InitializeUpdateData<int256_t>;
 	case PhysicalType::UINT128:
 		return InitializeUpdateData<uhugeint_t>;
 	case PhysicalType::FLOAT:
@@ -965,6 +980,8 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 		return MergeUpdateLoop<uint64_t>;
 	case PhysicalType::INT128:
 		return MergeUpdateLoop<hugeint_t>;
+	case PhysicalType::INT256:
+		return MergeUpdateLoop<int256_t>;
 	case PhysicalType::UINT128:
 		return MergeUpdateLoop<uhugeint_t>;
 	case PhysicalType::FLOAT:
@@ -1102,6 +1119,8 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 		return TemplatedUpdateNumericStatistics<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedUpdateNumericStatistics<hugeint_t>;
+	case PhysicalType::INT256:
+		return TemplatedUpdateNumericStatistics<int256_t>;
 	case PhysicalType::UINT128:
 		return TemplatedUpdateNumericStatistics<uhugeint_t>;
 	case PhysicalType::FLOAT:
@@ -1192,6 +1211,8 @@ UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType 
 		return TemplatedGetEffectiveUpdates<uint64_t>;
 	case PhysicalType::INT128:
 		return TemplatedGetEffectiveUpdates<hugeint_t>;
+	case PhysicalType::INT256:
+		return TemplatedGetEffectiveUpdates<int256_t>;
 	case PhysicalType::UINT128:
 		return TemplatedGetEffectiveUpdates<uhugeint_t>;
 	case PhysicalType::FLOAT:

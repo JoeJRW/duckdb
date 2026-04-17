@@ -1,4 +1,5 @@
 #include "duckdb/common/row_operations/row_matcher.hpp"
+#include "duckdb/common/int256.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
@@ -302,6 +303,8 @@ MatchFunction RowMatcher::GetMatchFunction(const LogicalType &type, const Expres
 		return GetMatchFunction<NO_MATCH_SEL, int64_t>(predicate);
 	case PhysicalType::INT128:
 		return GetMatchFunction<NO_MATCH_SEL, hugeint_t>(predicate);
+	case PhysicalType::INT256:
+		return GetMatchFunction<NO_MATCH_SEL, int256_t>(predicate);
 	case PhysicalType::UINT8:
 		return GetMatchFunction<NO_MATCH_SEL, uint8_t>(predicate);
 	case PhysicalType::UINT16:

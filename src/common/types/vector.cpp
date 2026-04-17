@@ -16,6 +16,8 @@
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -484,6 +486,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case PhysicalType::INT128:
 		reinterpret_cast<hugeint_t *>(data)[index] = val.GetValueUnsafe<hugeint_t>();
 		break;
+	case PhysicalType::INT256:
+		reinterpret_cast<int256_t *>(data)[index] = val.GetValueUnsafe<int256_t>();
+		break;
 	case PhysicalType::UINT8:
 		reinterpret_cast<uint8_t *>(data)[index] = val.GetValueUnsafe<uint8_t>();
 		break;
@@ -691,6 +696,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			return Value::DECIMAL(reinterpret_cast<int64_t *>(data)[index], width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(reinterpret_cast<hugeint_t *>(data)[index], width, scale);
+		case PhysicalType::INT256:
+			return Value::DECIMAL(reinterpret_cast<int256_t *>(data)[index], width, scale);
 		default:
 			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
 			                        TypeIdToString(type.InternalType()));
@@ -1062,6 +1069,9 @@ void Vector::Flatten(idx_t count) {
 			break;
 		case PhysicalType::INT128:
 			TemplatedFlattenConstantVector<hugeint_t>(data, old_data, count);
+			break;
+		case PhysicalType::INT256:
+			TemplatedFlattenConstantVector<int256_t>(data, old_data, count);
 			break;
 		case PhysicalType::UINT128:
 			TemplatedFlattenConstantVector<uhugeint_t>(data, old_data, count);

@@ -52,6 +52,7 @@ FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) con
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
 	case PhysicalType::INT128:
+	case PhysicalType::INT256:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
 		result = NumericStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(&constant, 1));

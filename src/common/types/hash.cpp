@@ -4,6 +4,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 
 #include <functional>
 #include <cmath>
@@ -27,6 +28,12 @@ hash_t Hash(hugeint_t val) {
 template <>
 hash_t Hash(uhugeint_t val) {
 	return MurmurHash64(val.lower) ^ MurmurHash64(val.upper);
+}
+
+template <>
+hash_t Hash(int256_t val) {
+	return MurmurHash64(val.lower) ^ MurmurHash64(val.lower_middle) ^ MurmurHash64(val.upper_middle) ^
+	       MurmurHash64(static_cast<uint64_t>(val.upper));
 }
 
 template <class T>

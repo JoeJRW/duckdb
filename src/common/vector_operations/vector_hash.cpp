@@ -6,6 +6,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -310,6 +311,9 @@ void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, 
 	case PhysicalType::INT128:
 		TemplatedLoopHash<HAS_RSEL, hugeint_t>(input, result, rsel, count);
 		break;
+	case PhysicalType::INT256:
+		TemplatedLoopHash<HAS_RSEL, int256_t>(input, result, rsel, count);
+		break;
 	case PhysicalType::UINT128:
 		TemplatedLoopHash<HAS_RSEL, uhugeint_t>(input, result, rsel, count);
 		break;
@@ -449,6 +453,9 @@ void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector 
 		break;
 	case PhysicalType::INT128:
 		TemplatedLoopCombineHash<HAS_RSEL, hugeint_t>(input, hashes, rsel, count);
+		break;
+	case PhysicalType::INT256:
+		TemplatedLoopCombineHash<HAS_RSEL, int256_t>(input, hashes, rsel, count);
 		break;
 	case PhysicalType::UINT128:
 		TemplatedLoopCombineHash<HAS_RSEL, uhugeint_t>(input, hashes, rsel, count);

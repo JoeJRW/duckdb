@@ -904,6 +904,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 	case PhysicalType::INT128:
 		function = ColumnDataCopy<hugeint_t>;
 		break;
+	case PhysicalType::INT256:
+		function = ColumnDataCopy<int256_t>;
+		break;
 	case PhysicalType::UINT8:
 		function = ColumnDataCopy<uint8_t>;
 		break;

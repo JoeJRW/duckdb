@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/int256.hpp"
 
 namespace duckdb {
 
@@ -90,6 +91,11 @@ hugeint_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
 template <>
 uhugeint_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
 	return v.value_.uhugeint;
+}
+
+template <>
+int256_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.int256;
 }
 
 template <>
@@ -257,6 +263,8 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 		return CheckZonemapTemplated<uint64_t>(stats, comparison_type, constants);
 	case PhysicalType::INT128:
 		return CheckZonemapTemplated<hugeint_t>(stats, comparison_type, constants);
+	case PhysicalType::INT256:
+		return CheckZonemapTemplated<int256_t>(stats, comparison_type, constants);
 	case PhysicalType::UINT128:
 		return CheckZonemapTemplated<uhugeint_t>(stats, comparison_type, constants);
 	case PhysicalType::FLOAT:
@@ -312,6 +320,9 @@ void SetNumericValueInternal(const Value &input, const LogicalType &type, Numeri
 	case PhysicalType::INT128:
 		val.value_.hugeint = HugeIntValue::Get(input);
 		break;
+	case PhysicalType::INT256:
+		val.value_.int256 = Int256Value::Get(input);
+		break;
 	case PhysicalType::UINT128:
 		val.value_.uhugeint = UhugeIntValue::Get(input);
 		break;
@@ -358,6 +369,8 @@ Value NumericValueUnionToValueInternal(const LogicalType &type, const NumericVal
 		return Value::UBIGINT(val.value_.ubigint);
 	case PhysicalType::INT128:
 		return Value::HUGEINT(val.value_.hugeint);
+	case PhysicalType::INT256:
+		return Value::INT256(val.value_.int256);
 	case PhysicalType::UINT128:
 		return Value::UHUGEINT(val.value_.uhugeint);
 	case PhysicalType::FLOAT:
@@ -459,6 +472,9 @@ static void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnio
 	case PhysicalType::INT128:
 		serializer.WriteProperty(101, "value", val.value_.hugeint);
 		break;
+	case PhysicalType::INT256:
+		serializer.WriteProperty(101, "value", val.value_.int256);
+		break;
 	case PhysicalType::UINT128:
 		serializer.WriteProperty(101, "value", val.value_.uhugeint);
 		break;
@@ -511,6 +527,9 @@ static void DeserializeNumericStatsValue(const LogicalType &type, NumericValueUn
 		break;
 	case PhysicalType::INT128:
 		result.value_.hugeint = deserializer.ReadProperty<hugeint_t>(101, "value");
+		break;
+	case PhysicalType::INT256:
+		result.value_.int256 = deserializer.ReadProperty<int256_t>(101, "value");
 		break;
 	case PhysicalType::UINT128:
 		result.value_.uhugeint = deserializer.ReadProperty<uhugeint_t>(101, "value");
@@ -609,6 +628,9 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 		break;
 	case PhysicalType::INT128:
 		TemplatedVerify<hugeint_t>(stats, vector, sel, count);
+		break;
+	case PhysicalType::INT256:
+		TemplatedVerify<int256_t>(stats, vector, sel, count);
 		break;
 	case PhysicalType::UINT128:
 		TemplatedVerify<uhugeint_t>(stats, vector, sel, count);

@@ -2,8 +2,10 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -179,6 +181,12 @@ bool TrySubtractOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_
 	return Uhugeint::TrySubtractInPlace(result, right);
 }
 
+template <>
+bool TrySubtractOperator::Operation(int256_t left, int256_t right, int256_t &result) {
+	result = left;
+	return Int256::TrySubtractInPlace(result, right);
+}
+
 //===--------------------------------------------------------------------===//
 // subtract decimal with overflow check
 //===--------------------------------------------------------------------===//
@@ -224,10 +232,36 @@ bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t &r
 }
 
 template <>
+bool TryDecimalSubtract::Operation(int256_t left, int256_t right, int256_t &result) {
+	if (!TrySubtractOperator::Operation(left, right, result)) {
+		return false;
+	}
+	const int256_t &limit = Int256::POWERS_OF_TEN[Decimal::MAX_WIDTH_INT256];
+	int256_t neg_limit;
+	if (!Int256::TryNegate(limit, neg_limit)) {
+		return false;
+	}
+	if (result <= neg_limit || result >= limit) {
+		return false;
+	}
+	return true;
+}
+
+template <>
 hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
 	hugeint_t result;
 	if (!TryDecimalSubtract::Operation(left, right, result)) {
 		throw OutOfRangeException("Overflow in subtract of DECIMAL(38) (%s - %s);", left.ToString(), right.ToString());
+	}
+	return result;
+}
+
+template <>
+int256_t DecimalSubtractOverflowCheck::Operation(int256_t left, int256_t right) {
+	int256_t result;
+	if (!TryDecimalSubtract::Operation(left, right, result)) {
+		throw OutOfRangeException("Overflow in subtract of DECIMAL(%d) (%s - %s);", Decimal::MAX_WIDTH_INT256,
+		                          left.ToString(), right.ToString());
 	}
 	return result;
 }

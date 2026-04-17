@@ -1,5 +1,6 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
 
@@ -95,6 +96,8 @@ static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 		return TemplatedMarkJoin<int64_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::INT128:
 		return TemplatedMarkJoin<hugeint_t, OP>(left, right, lcount, rcount, found_match);
+	case PhysicalType::INT256:
+		return TemplatedMarkJoin<int256_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::UINT8:
 		return TemplatedMarkJoin<uint8_t, OP>(left, right, lcount, rcount, found_match);
 	case PhysicalType::UINT16:

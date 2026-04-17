@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/types/int256.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -37,15 +38,18 @@ inline Value QuantileAbs(const Value &v) {
 		const auto integral = IntegralValue::Get(v);
 		const auto width = DecimalType::GetWidth(type);
 		const auto scale = DecimalType::GetScale(type);
+		const auto abs_integral = QuantileAbs<int256_t>(integral);
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return Value::DECIMAL(QuantileAbs<int16_t>(Cast::Operation<hugeint_t, int16_t>(integral)), width, scale);
+			return Value::DECIMAL(Cast::Operation<int256_t, int16_t>(abs_integral), width, scale);
 		case PhysicalType::INT32:
-			return Value::DECIMAL(QuantileAbs<int32_t>(Cast::Operation<hugeint_t, int32_t>(integral)), width, scale);
+			return Value::DECIMAL(Cast::Operation<int256_t, int32_t>(abs_integral), width, scale);
 		case PhysicalType::INT64:
-			return Value::DECIMAL(QuantileAbs<int64_t>(Cast::Operation<hugeint_t, int64_t>(integral)), width, scale);
+			return Value::DECIMAL(Cast::Operation<int256_t, int64_t>(abs_integral), width, scale);
 		case PhysicalType::INT128:
-			return Value::DECIMAL(QuantileAbs<hugeint_t>(integral), width, scale);
+			return Value::DECIMAL(Cast::Operation<int256_t, hugeint_t>(abs_integral), width, scale);
+		case PhysicalType::INT256:
+			return Value::DECIMAL(abs_integral, width, scale);
 		default:
 			throw InternalException("Unknown DECIMAL type");
 		}

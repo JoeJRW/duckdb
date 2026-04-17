@@ -1,6 +1,7 @@
 #include "duckdb/common/hive_partitioning.hpp"
 
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/common/int256.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -288,6 +289,9 @@ static void GetHivePartitionValuesTypeSwitch(Vector &input, vector<HivePartition
 		break;
 	case PhysicalType::INT128:
 		TemplatedGetHivePartitionValues<hugeint_t>(input, keys, col_idx, count);
+		break;
+	case PhysicalType::INT256:
+		TemplatedGetHivePartitionValues<int256_t>(input, keys, col_idx, count);
 		break;
 	case PhysicalType::UINT8:
 		TemplatedGetHivePartitionValues<uint8_t>(input, keys, col_idx, count);

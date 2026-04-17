@@ -75,6 +75,8 @@ template <>
 bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
 template <>
 bool TrySubtractOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result);
+template <>
+bool TrySubtractOperator::Operation(int256_t left, int256_t right, int256_t &result);
 
 struct SubtractOperatorOverflowCheck {
 	template <class TA, class TB, class TR>
@@ -103,6 +105,8 @@ template <>
 bool TryDecimalSubtract::Operation(int64_t left, int64_t right, int64_t &result);
 template <>
 bool TryDecimalSubtract::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
+template <>
+bool TryDecimalSubtract::Operation(int256_t left, int256_t right, int256_t &result);
 
 struct DecimalSubtractOverflowCheck {
 	template <class TA, class TB, class TR>
@@ -119,6 +123,9 @@ struct DecimalSubtractOverflowCheck {
 
 template <>
 hugeint_t DecimalSubtractOverflowCheck::Operation(hugeint_t left, hugeint_t right);
+
+template <>
+int256_t DecimalSubtractOverflowCheck::Operation(int256_t left, int256_t right);
 
 struct SubtractTimeOperator {
 	template <class TA, class TB, class TR>

@@ -228,10 +228,10 @@ struct QuantileInterpolator<true> {
 			const auto integral = q.integral;
 			const auto scaling = q.scaling;
 			const auto scaled_q =
-			    DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(Hugeint::Convert(n), integral);
+			    DecimalMultiplyOverflowCheck::Operation<int256_t, int256_t, int256_t>(Int256::Convert(n), integral);
 			const auto scaled_n =
-			    DecimalMultiplyOverflowCheck::Operation<hugeint_t, hugeint_t, hugeint_t>(Hugeint::Convert(n), scaling);
-			floored = Cast::Operation<hugeint_t, idx_t>((scaled_n - scaled_q) / scaling);
+			    DecimalMultiplyOverflowCheck::Operation<int256_t, int256_t, int256_t>(Int256::Convert(n), scaling);
+			floored = Cast::Operation<int256_t, idx_t>((scaled_n - scaled_q) / scaling);
 			break;
 		}
 		default:
