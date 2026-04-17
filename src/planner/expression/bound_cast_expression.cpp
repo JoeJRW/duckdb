@@ -6,6 +6,7 @@
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -28,8 +29,8 @@ BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expr
       bound_cast(BindCastFunction(context, child->return_type, return_type)) {
 }
 
-unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
-                                                 BoundCastInfo bound_cast, bool try_cast) {
+static unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
+                                                        BoundCastInfo bound_cast, bool try_cast) {
 	if (ExpressionBinder::GetExpressionReturnType(*expr) == target_type) {
 		return expr;
 	}
@@ -46,9 +47,9 @@ unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, co
 	return std::move(result);
 }
 
-unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
-                                             CastFunctionSet &cast_functions, GetCastFunctionInput &get_input,
-                                             bool try_cast) {
+static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
+                                                    CastFunctionSet &cast_functions, GetCastFunctionInput &get_input,
+                                                    bool try_cast) {
 	D_ASSERT(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = expr->Cast<BoundParameterExpression>();
@@ -127,6 +128,9 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	if (source_type.id() == LogicalTypeId::DOUBLE || target_type.id() == LogicalTypeId::DOUBLE) {
 		return false;
 	}
+	if (source_type.id() == LogicalTypeId::VARIANT || target_type.id() == LogicalTypeId::VARIANT) {
+		return false;
+	}
 	if (source_type.id() == LogicalTypeId::DECIMAL || target_type.id() == LogicalTypeId::DECIMAL) {
 		uint8_t source_width, target_width;
 		uint8_t source_scale, target_scale;
@@ -180,6 +184,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		switch (source_type.id()) {
 		case LogicalTypeId::DATE:
 		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIME_NS:
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_MS:
