@@ -15,6 +15,7 @@
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -1971,18 +1972,20 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	vector<StorageIndex> column_ids;
 	column_ids.emplace_back(physical_index);
 
-	// Use SCAN_COMMITTED to scan the latest data.
-	CreateIndexScanState state;
-	auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
+	// Use a transaction-aware scan so that uncommitted updates from the current transaction
+	// (e.g. default values from ADD COLUMN) are visible. This allows SET NOT NULL to succeed
+	// after ADD COLUMN ... DEFAULT ... within the same transaction.
+	auto client_context = context.GetClientContext();
+	D_ASSERT(client_context);
+	auto &transaction = DuckTransaction::Get(*client_context, parent.db);
+
+	TableScanState state;
 	state.Initialize(column_ids, nullptr);
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
-	InitializeCreateIndexScan(state);
-
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
-		if (scan_chunk.size() == 0) {
+		if (!state.table_state.Scan(transaction, scan_chunk)) {
 			break;
 		}
 
