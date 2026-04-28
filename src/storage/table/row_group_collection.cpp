@@ -462,10 +462,6 @@ bool RowGroupCollection::IsEmpty() const {
 	return row_groups->IsEmpty(l);
 }
 
-idx_t RowGroupCollection::GetRowGroupCount() const {
-	return row_groups->GetSegmentCount();
-}
-
 void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state) {
 	state.row_start = UnsafeNumericCast<row_t>(total_rows.load());
 	state.current_row = state.row_start;

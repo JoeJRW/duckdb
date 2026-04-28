@@ -638,8 +638,8 @@ struct DisabledOptimizersSetting {
     static constexpr const char *Name = "disabled_optimizers";
     static constexpr const char *Description = "DEBUG SETTING: disable a specific set of optimizers (comma separated)";
     static constexpr const char *InputType = "VARCHAR";
-    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
     static Value GetSetting(const ClientContext &context);
 };
 
@@ -1150,6 +1150,16 @@ struct MaxTempDirectorySizeSetting {
     static Value GetSetting(const ClientContext &context);
 };
 
+struct MaxThreadsPerQuerySetting {
+    using RETURN_TYPE = idx_t;
+    static constexpr const char *Name = "max_threads_per_query";
+    static constexpr const char *Description = "The max threads for single query";
+    static constexpr const char *InputType = "UBIGINT";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
+};
+
 struct MaxVacuumTasksSetting {
     using RETURN_TYPE = idx_t;
     static constexpr const char *Name = "max_vacuum_tasks";
@@ -1281,6 +1291,16 @@ struct PivotLimitSetting {
     static constexpr const char *DefaultValue = "100000";
     static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
     static constexpr idx_t SettingIndex = 80;
+};
+
+struct PreferHighPrecisionSetting {
+    using RETURN_TYPE = bool;
+    static constexpr const char *Name = "prefer_high_precision";
+    static constexpr const char *Description = "Prefer high precision decimal arithmetic";
+    static constexpr const char *InputType = "BOOLEAN";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
 };
 
 struct PreferRangeJoinsSetting {
@@ -1415,6 +1435,16 @@ struct SecretDirectorySetting {
     static constexpr const char *InputType = "VARCHAR";
     static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
     static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+    static Value GetSetting(const ClientContext &context);
+};
+
+struct SqlModeSetting {
+    using RETURN_TYPE = idx_t;
+    static constexpr const char *Name = "sql_mode";
+    static constexpr const char *Description = "MySQL sql mode bitmask";
+    static constexpr const char *InputType = "UBIGINT";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
     static Value GetSetting(const ClientContext &context);
 };
 

@@ -183,9 +183,6 @@ vector<CompressionType> CompressionFunctionSet::GetDisabledCompressionMethods() 
 	return result;
 }
 
-// TODO(merge): fork previously implemented lazy-loaded GetCompressionFunction with StorageLock.
-// Upstream now eagerly initialises all compression functions in the constructor, so the lazy
-// loading path was removed. Re-evaluate whether the lazy behaviour is still needed.
 vector<CompressionType> DBConfig::GetDisabledCompressionMethods() const {
 	return compression_functions->GetDisabledCompressionMethods();
 }

@@ -969,8 +969,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	}
 
 	if (sink.count_before_combining == 0) {
-		// fork: MySQL compatibility — return empty set (skip upstream's
-		// synthesize-row-from-empty-intermediates path).
+		// If the count_before_combining is zero, MySQL will return empty set.
 		gstate.finished = true;
 		return SourceResultType::FINISHED;
 	}

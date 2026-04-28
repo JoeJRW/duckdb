@@ -561,24 +561,12 @@ void DefaultBlockSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {
 //===----------------------------------------------------------------------===//
 void DefaultCollationSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (info.context) {
-		ExpressionBinder::TestCollation(*info.context, input.ToString());
+		auto parameter = input.ToString();
+		ExpressionBinder::TestCollation(*info.context, parameter);
+		// fork: mirror into ClientConfig::collation so direct-field read sites
+		// (collation_binding.cpp, minmax.cpp, etc.) see the value.
+		ClientConfig::GetConfig(*info.context).collation = parameter;
 	}
-}
-void DefaultCollationSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = input.ToString();
-	ExpressionBinder::TestCollation(context, parameter);
-	auto &config = ClientConfig::GetConfig(context);
-	config.collation = parameter;
-}
-
-void DefaultCollationSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.collation = ClientConfig().collation;
-}
-
-Value DefaultCollationSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value(config.collation);
 }
 //===----------------------------------------------------------------------===//
 // Default Null Order
@@ -1711,22 +1699,6 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	}
 	info.context->transaction.SetInvalidationPolicy(
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
-}
-
-//===----------------------------------------------------------------------===//
-// Appender Allocator Flush Threshold
-//===----------------------------------------------------------------------===//
-void AppenderAllocatorFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.appender_allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
-}
-
-void AppenderAllocatorFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.appender_allocator_flush_threshold = DBConfig().options.appender_allocator_flush_threshold;
-}
-
-Value AppenderAllocatorFlushThresholdSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.options.appender_allocator_flush_threshold));
 }
 
 } // namespace duckdb

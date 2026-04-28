@@ -700,11 +700,11 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 					throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name);
 				} else {
 					if (!only_full_group_by) {
-						SelectBinder select_binder_add_any_value(*this, context, *result, info, only_full_group_by);
+						SelectBinder select_binder_add_any_value(*this, context, result, info, only_full_group_by);
 						for (auto &index : rebind_indexes) {
 							LogicalType result_type;
 							auto expr = select_binder_add_any_value.Bind(expr_backups[index], &result_type, true);
-							result->select_list[index] = std::move(expr);
+							result.select_list[index] = std::move(expr);
 						}
 						if (select_binder_add_any_value.GetBoundColumns().size() > 0) {
 							bound_columns = select_binder_add_any_value.GetBoundColumns();

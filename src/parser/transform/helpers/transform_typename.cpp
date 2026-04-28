@@ -17,9 +17,6 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeExpressionInternal(duckdb
 	string schema_name;
 	string catalog_name;
 
-	// TODO(merge): fork's `modify the decimal properties` (MySQL decimal(10,0) default)
-	// was attached to a function signature that upstream removed. Re-port the default
-	// onto the new transform path (likely in TransformTypeName or its callers).
 	if (type_name.names->length == 0) {
 		throw ParserException("Type name cannot be empty");
 	}

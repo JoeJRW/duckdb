@@ -338,7 +338,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 	// We should also push collations for non-VARCHAR here, but we aren't ready for it yet (see internal #8704)
 	const auto collation = arguments[0]->return_type.id() == LogicalTypeId::VARCHAR &&
 	                       (!StringType::GetCollation(arguments[0]->return_type).empty() ||
-	                        !Settings::Get<DefaultCollationSetting>(context).empty()) &&
+	                        !ClientConfig::GetConfig(context).collation.empty()) &&
 	                       !ClientConfig::GetConfig(context).force_no_collation;
 	auto collated_arg = collation ? arguments[0]->Copy() : nullptr;
 	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->return_type)) {

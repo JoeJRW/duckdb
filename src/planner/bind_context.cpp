@@ -492,6 +492,9 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		// SELECT * case
 		// bind all expressions of each table in-order
 		reference_set_t<UsingColumnSet> handled_using_columns;
+		// USING-clause columns must come first in SELECT * output (MySQL compat). Collect them into a separate list and
+		// prepend to new_select_list once the iteration completes.
+		vector<unique_ptr<ParsedExpression>> using_list;
 		for (auto &entry : bindings_list) {
 			auto &binding = *entry;
 			auto &column_names = binding.GetColumnNames();
@@ -522,14 +525,14 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 						}
 						coalesce->SetAlias(column_name);
 						if (HandleRename(expr, qualified_column, coalesce, exclusion_info)) {
-							new_select_list.push_back(std::move(coalesce));
+							using_list.push_back(std::move(coalesce));
 						}
 					} else {
 						// primary binding: output the qualified column ref
 						auto new_expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(
 						    column_name, using_binding.primary_binding);
 						if (HandleRename(expr, qualified_column, new_expr, exclusion_info)) {
-							new_select_list.push_back(std::move(new_expr));
+							using_list.push_back(std::move(new_expr));
 						}
 					}
 					handled_using_columns.insert(using_binding);
@@ -542,6 +545,9 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				}
 			}
 		}
+		// Prepend USING-clause columns so they appear first in SELECT * output.
+		new_select_list.insert(new_select_list.begin(), std::make_move_iterator(using_list.begin()),
+		                       std::make_move_iterator(using_list.end()));
 	} else {
 		// SELECT tbl.* case
 		// SELECT struct.* case

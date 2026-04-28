@@ -497,12 +497,9 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 Appender::Appender(Connection &con, const string &database_name, const string &schema_name, const string &table_name,
                    AppenderType appender_type, const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), appender_type), context(con.context) {
-	if (flush_memory_threshold_p == DConstants::INVALID_INDEX) {
-		auto &config = DBConfig::GetConfig(*con.context);
-		flush_memory_threshold = optional_idx(config.options.appender_allocator_flush_threshold);
-	} else {
-		flush_memory_threshold = optional_idx(flush_memory_threshold_p);
-	}
+	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
+	                             ? optional_idx::Invalid()
+	                             : optional_idx(flush_memory_threshold_p);
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
@@ -586,19 +583,19 @@ string Appender::ConstructQuery(TableDescription &description_p, const string &t
                                 const vector<string> &expected_names) {
 	string query = "INSERT INTO ";
 	if (!description_p.database.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description_p.database));
+		query += StringUtil::Format("`%s`.", description_p.database);
 	}
 	if (!description_p.schema.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description_p.schema));
+		query += StringUtil::Format("`%s`.", description_p.schema);
 	}
-	query += StringUtil::Format("%s", SQLIdentifier(description_p.table));
+	query += StringUtil::Format("`%s`", description_p.table);
 	if (!expected_names.empty()) {
 		query += "(";
 		for (idx_t i = 0; i < expected_names.size(); i++) {
 			if (i > 0) {
 				query += ", ";
 			}
-			query += StringUtil::Format("%s", SQLIdentifier(expected_names[i]));
+			query += StringUtil::Format("`%s`", expected_names[i]);
 		}
 		query += ")";
 	}

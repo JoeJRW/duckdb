@@ -421,19 +421,6 @@ void ColumnDataCheckpointer::Checkpoint() {
 		return;
 	}
 
-	D_ASSERT(compression_functions.empty());
-	auto &db = storage_manager.GetDatabase();
-	auto &config = DBConfig::GetConfig(db);
-	compression_functions.resize(checkpoint_states.size());
-	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		auto &col_data = checkpoint_states[i].get().column_data;
-		auto to_add = config.GetCompressionFunctions(col_data.type.InternalType());
-		auto &functions = compression_functions[i];
-		for (auto &func : to_add) {
-			functions.push_back(&func.get());
-		}
-	}
-
 	WriteToDisk();
 }
 

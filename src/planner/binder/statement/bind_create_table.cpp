@@ -677,13 +677,16 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		VerifyCompressionType(context, storage_manager, config, *result);
 		CreateColumnDependencyManager(*result);
 
-		// bind collations to detect any unsupported collation errors (fork: MySQL-compat)
+		// bind collations to detect any unsupported collation errors
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
 			if (column.Type().id() == LogicalTypeId::VARCHAR) {
 				ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 			}
 		}
+		// bind the generated column expressions
+		BindGeneratedColumns(*result);
+		// bind any constraints
 
 		BindCreateTableConstraints(base, entry_retriever, schema);
 

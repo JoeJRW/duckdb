@@ -577,6 +577,7 @@ bundle-setup-debug:
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
+	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \

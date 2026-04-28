@@ -34,12 +34,21 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	// now create a cast operation
 	auto result = make_uniq<CastExpression>(target_type, std::move(expression), try_cast);
 	SetQueryLocation(*result, root.location);
-	if (target_type == LogicalTypeId::VARCHAR) {
-		if (type_name->typmods) {
+	// When casting to CHAR(N)/VARCHAR(N), DuckDB ignores the length modifier.
+	// To match MySQL semantics, wrap in LEFT(cast_result, N) to truncate.
+	// Since v1.5.2, TransformTypeName returns UNBOUND, so check the PG type name directly.
+	if (type_name->typmods) {
+		string cast_type_name;
+		if (type_name->names && type_name->names->length > 0) {
+			auto name_cell = type_name->names->tail;
+			cast_type_name = PGPointerCast<duckdb_libpgquery::PGValue>(name_cell->data.ptr_value)->val.str;
+		}
+		auto type_id = TransformStringToLogicalTypeId(cast_type_name);
+		if (type_id == LogicalTypeId::VARCHAR) {
 			std::vector<unique_ptr<ParsedExpression>> children;
 			auto &const_val = *Transformer::PGPointerCast<duckdb_libpgquery::PGAConst>(type_name->typmods->head->data.ptr_value);
 			children.push_back(std::move(result));
-			children.push_back(std::move(make_uniq<ConstantExpression>(Value::BIGINT(const_val.val.val.ival)) ));
+			children.push_back(std::move(make_uniq<ConstantExpression>(Value::BIGINT(const_val.val.val.ival))));
 			auto function = make_uniq<FunctionExpression>("left", std::move(children));
 			return std::move(function);
 		}

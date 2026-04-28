@@ -21,8 +21,9 @@ namespace {
 LogicalType BindDecimalType(BindLogicalTypeInput &input) {
 	auto &modifiers = input.modifiers;
 
-	uint8_t width = 18;
-	uint8_t scale = 3;
+	// RDS: MySQL-compat default for DECIMAL with no modifiers is DECIMAL(10, 0).
+	uint8_t width = 10;
+	uint8_t scale = 0;
 
 	if (!modifiers.empty()) {
 		auto width_value = modifiers[0].GetValue();

@@ -274,9 +274,56 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 		}
 
 		// figure out the types of the setop result by picking the max of both
-		// TODO(merge): re-port fork's UNION collation merging (NOCASE/NOACCENT intersection)
-		// onto the new bound_children[]-based structure supporting >2 children.
 		for (idx_t i = 0; i < result_columns; i++) {
+			// DuckDB always use the collation of right expr.
+			bool all_varchar = true;
+			for (idx_t child_idx = 0; child_idx < result.bound_children.size(); ++child_idx) {
+				if (result.bound_children[child_idx].types[i] != LogicalTypeId::VARCHAR) {
+					all_varchar = false;
+					break;
+				}
+			}
+			if (all_varchar) {
+				bool all_nocase = true;
+				bool all_noaccent = true;
+				bool any_collation_set = false;
+				for (idx_t child_idx = 0; child_idx < result.bound_children.size(); ++child_idx) {
+					auto collation =
+					    StringUtil::Lower(StringType::GetCollation(result.bound_children[child_idx].types[i]));
+					if (!collation.empty()) {
+						any_collation_set = true;
+					}
+					if (collation.find("nocase") == std::string::npos) {
+						all_nocase = false;
+					}
+					if (collation.find("noaccent") == std::string::npos) {
+						all_noaccent = false;
+					}
+				}
+				std::string result_collation;
+				if (all_nocase) {
+					result_collation.append("NOCASE");
+				}
+				if (all_noaccent) {
+					if (!result_collation.empty()) {
+						result_collation.push_back('.');
+					}
+					result_collation.append("NOACCENT");
+				}
+				LogicalType result_type;
+				if (result_collation.empty()) {
+					result_type = any_collation_set ? LogicalType::VARCHAR_COLLATION("POSIX") : LogicalType::VARCHAR;
+				} else {
+					result_type = LogicalType::VARCHAR_COLLATION(result_collation);
+				}
+				if (!can_contain_nulls) {
+					if (ExpressionBinder::ContainsNullType(result_type)) {
+						result_type = ExpressionBinder::ExchangeNullType(result_type);
+					}
+				}
+				result.types.push_back(result_type);
+				continue;
+			}
 			auto result_type = result.bound_children[0].types[i];
 			for (idx_t child_idx = 1; child_idx < result.bound_children.size(); ++child_idx) {
 				auto &child_types = result.bound_children[child_idx].types;

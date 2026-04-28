@@ -427,7 +427,7 @@
         "name": "disabled_optimizers",
         "description": "DEBUG SETTING: disable a specific set of optimizers (comma separated)",
         "type": "VARCHAR",
-        "scope": "global",
+        "scope": "local",
         "custom_implementation": true
     },
     {
@@ -631,19 +631,19 @@
         "custom_implementation": true
     },
     {
+        "name": "force_no_collation",
+        "description": "Force disable push collation",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "internal_setting": "force_no_collation"
+    },
+    {
         "name": "force_variant_shredding",
         "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
         "type": "VARCHAR",
         "scope": "global",
         "struct": "ForceVariantShredding",
         "custom_implementation": true
-    },
-    {
-        "name": "force_no_collation",
-        "description": "Force disable push collation",
-        "type": "BOOLEAN",
-        "scope": "local",
-        "internal_setting": "force_no_collation"
     },
     {
         "name": "geometry_minimum_shredding_size",
@@ -820,6 +820,13 @@
         "custom_implementation": true
     },
     {
+        "name": "max_threads_per_query",
+        "description": "The max threads for single query",
+        "type": "UBIGINT",
+        "scope": "local",
+        "internal_setting": "max_threads_per_query"
+    },
+    {
         "name": "max_vacuum_tasks",
         "description": "The maximum vacuum tasks to schedule during a checkpoint.",
         "type": "UBIGINT",
@@ -917,6 +924,13 @@
         "default_value": "100000"
     },
     {
+        "name": "prefer_high_precision",
+        "description": "Prefer high precision decimal arithmetic",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "internal_setting": "prefer_high_precision"
+    },
+    {
         "name": "prefer_range_joins",
         "description": "Force use of range joins with mixed predicates",
         "type": "BOOLEAN",
@@ -1012,6 +1026,13 @@
         "type": "VARCHAR",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "sql_mode",
+        "description": "MySQL sql mode bitmask",
+        "type": "UBIGINT",
+        "scope": "local",
+        "internal_setting": "sql_mode"
     },
     {
         "name": "storage_block_prefetch",

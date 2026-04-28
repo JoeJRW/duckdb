@@ -130,7 +130,7 @@ struct DBConfigOptions {
 	//! Enable mbedtls explicitly (overrides OpenSSL if available)
 	bool force_mbedtls = false;
 	//! The set of disabled optimizers (default empty)
-	// set<OptimizerType> disabled_optimizers; // fork: moved to ClientConfig (local scope)
+	// set<OptimizerType> disabled_optimizers;
 	//! The average string length required to use ZSTD compression.
 	uint64_t zstd_min_string_length = 4096;
 	//! Force a specific compression method to be used when checkpointing (if available)
@@ -177,9 +177,6 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
-
-	//! Peak allocation threshold at which to flush the allocator when appender flushes chunk
-	idx_t appender_allocator_flush_threshold = DConstants::INVALID_INDEX;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

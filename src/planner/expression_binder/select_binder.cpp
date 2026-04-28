@@ -57,4 +57,26 @@ unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &col
 	return ExpressionBinder::GetSQLValueFunction(column_name);
 }
 
+BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	// First attempt a regular column-ref bind (this also handles alias fallback via
+	// TryResolveAliasReference in ExpressionBinder::BindExpression(ColumnRefExpression&, ...)).
+	auto expr_copy = expr_ptr->Copy();
+	auto result = BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
+
+	// If MySQL non-strict GROUP BY mode is active and the regular bind pulled in a bare column,
+	// transparently rewrite the expression as `any_value(col)` and re-bind so the query doesn't
+	// error out with "must appear in the GROUP BY clause".
+	if (!only_full_group_by && HasBoundColumns()) {
+		vector<unique_ptr<ParsedExpression>> func_children;
+		func_children.push_back(std::move(expr_copy));
+		unique_ptr<ParsedExpression> wrapped =
+		    make_uniq<FunctionExpression>("any_value", std::move(func_children));
+		result = ExpressionBinder::BindExpression(wrapped, depth);
+		// The original column ref got accounted for in bound_columns; drop that entry since
+		// the any_value wrap absorbed it into an aggregate and the column is no longer "bare".
+		bound_columns.pop_back();
+	}
+	return result;
+}
+
 } // namespace duckdb

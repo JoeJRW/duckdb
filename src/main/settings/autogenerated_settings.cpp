@@ -177,10 +177,61 @@ void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
+// Max Threads Per Query
+//===----------------------------------------------------------------------===//
+void MaxThreadsPerQuerySetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.max_threads_per_query = input.GetValue<idx_t>();
+}
+
+void MaxThreadsPerQuerySetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).max_threads_per_query = ClientConfig().max_threads_per_query;
+}
+
+Value MaxThreadsPerQuerySetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.max_threads_per_query);
+}
+
+//===----------------------------------------------------------------------===//
 // Pin Threads
 //===----------------------------------------------------------------------===//
 void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<ThreadPinMode>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Prefer High Precision
+//===----------------------------------------------------------------------===//
+void PreferHighPrecisionSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.prefer_high_precision = input.GetValue<bool>();
+}
+
+void PreferHighPrecisionSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).prefer_high_precision = ClientConfig().prefer_high_precision;
+}
+
+Value PreferHighPrecisionSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.prefer_high_precision);
+}
+
+//===----------------------------------------------------------------------===//
+// Sql Mode
+//===----------------------------------------------------------------------===//
+void SqlModeSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.sql_mode = input.GetValue<idx_t>();
+}
+
+void SqlModeSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).sql_mode = ClientConfig().sql_mode;
+}
+
+Value SqlModeSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.sql_mode);
 }
 
 //===----------------------------------------------------------------------===//

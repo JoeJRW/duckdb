@@ -595,14 +595,10 @@ void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
 		return;
 	}
 
-	if (!block.IsUnloaded()) {
+	if (!memory.HasWrittenToTemporaryBlock()) {
 		return;
 	}
-
-	if (!block.HasWrittenToTemporaryBlock()) {
-		return;
-	}
-	block.SetWrittenToTemporaryBlock(false);
+	memory.SetWrittenToTemporaryBlock(false);
 
 	// The file is not in the shared pool of files.
 	auto &fs = FileSystem::GetFileSystem(db);
