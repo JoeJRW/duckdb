@@ -341,11 +341,8 @@
         "name": "default_collation",
         "description": "The collation setting used when none is specified",
         "type": "VARCHAR",
-        "default_scope": "local",
-        "default_value": "",
-        "on_callbacks": [
-            "set"
-        ]
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "default_null_order",

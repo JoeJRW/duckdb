@@ -559,15 +559,23 @@ void DefaultBlockSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {
 //===----------------------------------------------------------------------===//
 // Default Collation
 //===----------------------------------------------------------------------===//
-void DefaultCollationSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	if (info.context) {
-		auto parameter = input.ToString();
-		ExpressionBinder::TestCollation(*info.context, parameter);
-		// fork: mirror into ClientConfig::collation so direct-field read sites
-		// (collation_binding.cpp, minmax.cpp, etc.) see the value.
-		ClientConfig::GetConfig(*info.context).collation = parameter;
-	}
+void DefaultCollationSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = input.ToString();
+	ExpressionBinder::TestCollation(context, parameter);
+	auto &config = ClientConfig::GetConfig(context);
+	config.collation = parameter;
 }
+
+void DefaultCollationSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.collation = ClientConfig().collation;
+}
+
+Value DefaultCollationSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.collation);
+}
+
 //===----------------------------------------------------------------------===//
 // Default Null Order
 //===----------------------------------------------------------------------===//

@@ -28,10 +28,6 @@ protected:
 
 	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name) override;
 
-	//! fork (`b0bd125534` Support only_full_group_by): when the setting `sql_mode` does NOT have
-	//! `MODE_ONLY_FULL_GROUP_BY` enabled, bare column references in the SELECT list that aren't in
-	//! GROUP BY are transparently wrapped in `any_value(col)` to match MySQL's permissive GROUP BY
-	//! semantics. When the setting IS enabled, we fall back to the vanilla DuckDB behaviour.
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 
 protected:
