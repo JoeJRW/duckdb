@@ -595,6 +595,10 @@ void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
 		return;
 	}
 
+	if (!memory.IsUnloaded()) {
+		return;
+	}
+
 	if (!memory.HasWrittenToTemporaryBlock()) {
 		return;
 	}
