@@ -17,6 +17,8 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
@@ -47,9 +49,59 @@ DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : Transacti
 		// Specifically the StorageManager of the DuckCatalog is relied on, with `db.GetStorageManager`
 		throw InternalException("DuckTransactionManager should only be created together with a DuckCatalog");
 	}
+	background_checkpoint_thread = std::thread([this]() { BackgroundCheckpointLoop(); });
 }
 
 DuckTransactionManager::~DuckTransactionManager() {
+	ShutdownBackgroundCheckpoint();
+}
+
+void DuckTransactionManager::ShutdownBackgroundCheckpoint() {
+	{
+		lock_guard<mutex> guard(checkpoint_cv_lock);
+		shutdown_checkpoint_thread = true;
+	}
+	checkpoint_cv.notify_one();
+	if (background_checkpoint_thread.joinable()) {
+		background_checkpoint_thread.join();
+	}
+}
+
+void DuckTransactionManager::BackgroundCheckpointLoop() {
+	while (true) {
+		CheckpointOptions options;
+		unique_ptr<StorageLockKey> ckpt_lock;
+		{
+			unique_lock<mutex> guard(checkpoint_cv_lock);
+			checkpoint_cv.wait(guard, [this]() { return checkpoint_pending || shutdown_checkpoint_thread; });
+			if (shutdown_checkpoint_thread && !checkpoint_pending) {
+				return;
+			}
+			options = pending_checkpoint_options;
+			ckpt_lock = std::move(pending_checkpoint_lock);
+			checkpoint_pending = false;
+		}
+		if (ckpt_lock) {
+			auto &storage_manager = db.GetStorageManager();
+			try {
+				storage_manager.CreateCheckpoint(QueryContext(), options);
+			} catch (...) {
+				// checkpoint failure is non-fatal: WAL has the committed data
+			}
+			// ckpt_lock released here, allowing the next checkpoint to proceed
+		}
+	}
+}
+
+void DuckTransactionManager::ScheduleBackgroundCheckpoint(CheckpointOptions options,
+                                                          unique_ptr<StorageLockKey> lock) {
+	{
+		lock_guard<mutex> guard(checkpoint_cv_lock);
+		pending_checkpoint_options = options;
+		pending_checkpoint_lock = std::move(lock);
+		checkpoint_pending = true;
+	}
+	checkpoint_cv.notify_one();
 }
 
 DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
@@ -319,8 +371,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	ErrorData error;
 	unique_ptr<lock_guard<mutex>> held_wal_lock;
 	unique_ptr<StorageCommitState> commit_state;
+	auto &config = DBConfig::GetConfig(db.GetDatabase());
+	bool background_checkpoint = config.options.enable_background_checkpoint;
 	bool skip_wal_write_due_to_checkpoint = false;
-	if (checkpoint_decision.can_checkpoint) {
+	if (checkpoint_decision.can_checkpoint && !background_checkpoint) {
 		// we can perform an automatic checkpoint
 		// we have two options:
 		// either we write to the WAL, in which case we can perform concurrent commits while running
@@ -450,20 +504,27 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		if (!lock || lock->GetType() != StorageLockType::EXCLUSIVE) {
 			throw InternalException("Checkpointing requires an exclusive lock to be held");
 		}
-		// we can unlock the transaction lock while checkpointing
 		// checkpoint the database to disk
 		CheckpointOptions options;
 		options.action = CheckpointAction::ALWAYS_CHECKPOINT;
 		options.type = checkpoint_decision.type;
-		options.wal_lock = held_wal_lock.get();
-		auto &storage_manager = db.GetStorageManager();
-		try {
-			storage_manager.CreateCheckpoint(context, options);
-		} catch (std::exception &ex) {
-			// a checkpoint failure here should not result in the commit being turned into a rollback
-			// .. UNLESS we have skipped writing to the WAL and there are concurrent transactions active
-			if (skip_wal_write_due_to_checkpoint) {
-				error.Merge(ErrorData(ex));
+
+		if (background_checkpoint) {
+			// async path: WAL has the committed data, hand off to background thread
+			D_ASSERT(!held_wal_lock);
+			ScheduleBackgroundCheckpoint(options, std::move(lock));
+		} else {
+			// sync path: original behavior
+			options.wal_lock = held_wal_lock.get();
+			auto &storage_manager = db.GetStorageManager();
+			try {
+				storage_manager.CreateCheckpoint(context, options);
+			} catch (std::exception &ex) {
+				// a checkpoint failure here should not result in the commit being turned into a rollback
+				// .. UNLESS we have skipped writing to the WAL and there are concurrent transactions active
+				if (skip_wal_write_due_to_checkpoint) {
+					error.Merge(ErrorData(ex));
+				}
 			}
 		}
 	}

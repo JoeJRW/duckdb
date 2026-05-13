@@ -303,6 +303,11 @@ void AttachedDatabase::Close(const DatabaseCloseAction action) {
 		}
 
 		if (create_checkpoint) {
+			// shut down the background checkpoint thread before doing the final checkpoint
+			if (transaction_manager && transaction_manager->IsDuckTransactionManager()) {
+				auto &duck_tm = transaction_manager->Cast<DuckTransactionManager>();
+				duck_tm.ShutdownBackgroundCheckpoint();
+			}
 			auto &config = DBConfig::GetConfig(db);
 			if (config.options.checkpoint_on_shutdown) {
 				CheckpointOptions options;

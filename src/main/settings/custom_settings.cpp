@@ -326,6 +326,22 @@ Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Background Checkpoint
+//===----------------------------------------------------------------------===//
+void EnableBackgroundCheckpointSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_background_checkpoint = input.GetValue<bool>();
+}
+
+void EnableBackgroundCheckpointSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_background_checkpoint = false;
+}
+
+Value EnableBackgroundCheckpointSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.enable_background_checkpoint);
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

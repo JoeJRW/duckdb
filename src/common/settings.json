@@ -446,6 +446,13 @@
         "default_value": "50"
     },
     {
+        "name": "enable_background_checkpoint",
+        "description": "Run auto-checkpoint in a background thread instead of blocking the committing thread",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "enable_external_access",
         "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",

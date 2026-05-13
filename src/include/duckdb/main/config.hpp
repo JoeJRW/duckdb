@@ -122,6 +122,8 @@ struct DBConfigOptions {
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
 	bool checkpoint_on_shutdown = true;
+	//! Run auto-checkpoint in a background thread instead of blocking the committing thread
+	bool enable_background_checkpoint = false;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
 	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions

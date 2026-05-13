@@ -663,6 +663,16 @@ struct DynamicOrFilterThresholdSetting {
     static constexpr idx_t SettingIndex = 35;
 };
 
+struct EnableBackgroundCheckpointSetting {
+    using RETURN_TYPE = bool;
+    static constexpr const char *Name = "enable_background_checkpoint";
+    static constexpr const char *Description = "Run auto-checkpoint in a background thread instead of blocking the committing thread";
+    static constexpr const char *InputType = "BOOLEAN";
+    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+    static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableExternalAccessSetting {
     using RETURN_TYPE = bool;
     static constexpr const char *Name = "enable_external_access";
