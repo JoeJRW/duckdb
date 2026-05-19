@@ -68,6 +68,7 @@ void DuckTransactionManager::ShutdownBackgroundCheckpoint() {
 }
 
 void DuckTransactionManager::BackgroundCheckpointLoop() {
+	idx_t concurrent_checkpoint_count = 0;
 	while (true) {
 		CheckpointOptions options;
 		unique_ptr<StorageLockKey> ckpt_lock;
@@ -82,6 +83,19 @@ void DuckTransactionManager::BackgroundCheckpointLoop() {
 			checkpoint_pending = false;
 		}
 		if (ckpt_lock) {
+			// determine whether to force a concurrent checkpoint to avoid blocking readers/writers
+			auto &config = DBConfig::GetConfig(db.GetDatabase());
+			auto full_interval = config.options.background_checkpoint_full_interval;
+			if (full_interval > 0 && options.type == CheckpointType::FULL_CHECKPOINT) {
+				concurrent_checkpoint_count++;
+				if (concurrent_checkpoint_count >= full_interval) {
+					// reached the interval - do a full checkpoint and reset
+					concurrent_checkpoint_count = 0;
+				} else {
+					// prefer concurrent checkpoint to avoid blocking
+					options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+				}
+			}
 			auto &storage_manager = db.GetStorageManager();
 			try {
 				storage_manager.CreateCheckpoint(QueryContext(), options);

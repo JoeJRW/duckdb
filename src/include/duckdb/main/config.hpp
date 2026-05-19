@@ -124,6 +124,8 @@ struct DBConfigOptions {
 	bool checkpoint_on_shutdown = true;
 	//! Run auto-checkpoint in a background thread instead of blocking the committing thread
 	bool enable_background_checkpoint = false;
+	//! Number of concurrent checkpoints between full checkpoints in background mode (0 = always full)
+	idx_t background_checkpoint_full_interval = 0;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
 	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions

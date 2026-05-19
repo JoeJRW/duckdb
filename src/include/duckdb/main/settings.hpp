@@ -332,6 +332,16 @@ struct AutoloadKnownExtensionsSetting {
     static constexpr idx_t SettingIndex = 14;
 };
 
+struct BackgroundCheckpointFullIntervalSetting {
+    using RETURN_TYPE = idx_t;
+    static constexpr const char *Name = "background_checkpoint_full_interval";
+    static constexpr const char *Description = "Number of concurrent checkpoints between full checkpoints in background mode (0 = always full)";
+    static constexpr const char *InputType = "UBIGINT";
+    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+    static Value GetSetting(const ClientContext &context);
+};
+
 struct BlockAllocatorMemorySetting {
     using RETURN_TYPE = string;
     static constexpr const char *Name = "block_allocator_memory";

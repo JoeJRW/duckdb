@@ -326,6 +326,22 @@ Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Background Checkpoint Full Interval
+//===----------------------------------------------------------------------===//
+void BackgroundCheckpointFullIntervalSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.background_checkpoint_full_interval = input.GetValue<idx_t>();
+}
+
+void BackgroundCheckpointFullIntervalSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.background_checkpoint_full_interval = 0;
+}
+
+Value BackgroundCheckpointFullIntervalSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.background_checkpoint_full_interval);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Background Checkpoint
 //===----------------------------------------------------------------------===//
 void EnableBackgroundCheckpointSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

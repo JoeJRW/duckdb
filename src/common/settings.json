@@ -183,6 +183,13 @@
         }
     },
     {
+        "name": "background_checkpoint_full_interval",
+        "description": "Number of concurrent checkpoints between full checkpoints in background mode (0 = always full)",
+        "type": "UBIGINT",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "block_allocator_memory",
         "description": "Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced).",
         "type": "VARCHAR",
