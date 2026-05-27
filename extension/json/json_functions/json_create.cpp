@@ -4,6 +4,8 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
+#include <map>
+
 namespace duckdb {
 
 using StructNames = unordered_map<string, unique_ptr<Vector>>;
@@ -592,15 +594,9 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		break;
 	}
 	case LogicalTypeId::DECIMAL: {
-		if (DecimalType::GetWidth(type) > 15) {
-			Vector string_vector(LogicalTypeId::VARCHAR, count);
-			VectorOperations::DefaultCast(value_v, string_vector, count);
-			CreateRawValues(doc, vals, string_vector, count);
-		} else {
-			Vector double_vector(LogicalType::DOUBLE, count);
-			VectorOperations::DefaultCast(value_v, double_vector, count);
-			TemplatedCreateValues<double, double>(doc, vals, double_vector, count);
-		}
+		Vector string_vector(LogicalTypeId::VARCHAR, count);
+		VectorOperations::DefaultCast(value_v, string_vector, count);
+		CreateRawValues(doc, vals, string_vector, count);
 		break;
 	}
 	case LogicalTypeId::INVALID:
@@ -620,6 +616,53 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::LAMBDA:
 		throw InternalException("Unsupported type arrived at JSON create function");
 	}
+}
+
+struct JSONKeyCompare {
+	bool operator()(const string &a, const string &b) const {
+		if (a.size() != b.size()) {
+			return a.size() < b.size();
+		}
+		return a < b;
+	}
+};
+
+static void SortAndDeduplicateObjectKeys(yyjson_mut_doc *doc, yyjson_mut_val *obj) {
+	size_t len = unsafe_yyjson_get_len(obj);
+	if (len == 0) {
+		return;
+	}
+
+	// Use a map with custom comparator: shorter keys first, then ASCII order.
+	// Inserting with operator[] overwrites the value, so last occurrence wins.
+	map<string, pair<yyjson_mut_val *, yyjson_mut_val *>, JSONKeyCompare> sorted_pairs;
+
+	yyjson_mut_obj_iter iter;
+	yyjson_mut_obj_iter_init(obj, &iter);
+	yyjson_mut_val *key;
+	while ((key = yyjson_mut_obj_iter_next(&iter))) {
+		yyjson_mut_val *val = yyjson_mut_obj_iter_get_val(key);
+		size_t klen = unsafe_yyjson_get_len(key);
+		string k(key->uni.str, klen);
+		sorted_pairs[k] = {key, val};
+	}
+
+	// Rebuild circular linked list in sorted order
+	vector<pair<yyjson_mut_val *, yyjson_mut_val *>> pairs;
+	pairs.reserve(sorted_pairs.size());
+	for (auto &entry : sorted_pairs) {
+		pairs.push_back(entry.second);
+	}
+
+	for (size_t i = 0; i < pairs.size(); i++) {
+		auto *k = pairs[i].first;
+		auto *v = pairs[i].second;
+		k->next = v;
+		size_t next_i = (i + 1) % pairs.size();
+		v->next = pairs[next_i].first;
+	}
+	obj->uni.ptr = (void *)pairs.back().first;
+	unsafe_yyjson_set_len(obj, pairs.size());
 }
 
 static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -642,6 +685,10 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		Vector &key_v = args.data[pair_idx * 2];
 		Vector &value_v = args.data[pair_idx * 2 + 1];
 		CreateKeyValuePairs(info.const_struct_names, doc, objs, vals, key_v, value_v, count);
+	}
+	// Sort keys and deduplicate (last value wins for duplicate keys)
+	for (idx_t i = 0; i < count; i++) {
+		SortAndDeduplicateObjectKeys(doc, objs[i]);
 	}
 	// Write JSON values to string
 	auto objects = FlatVector::GetData<string_t>(result);

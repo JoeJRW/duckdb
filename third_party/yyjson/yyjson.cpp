@@ -8478,14 +8478,15 @@ val_begin:
             cur = write_string(cur, esc, inv, str_ptr, str_len, enc_table);
             if (unlikely(!cur)) goto fail_str;
         }
-        *cur++ = is_key ? ':' : ',';
+        if (is_key) { *cur++ = ':'; *cur++ = ' '; }
+        else { *cur++ = ','; *cur++ = ' '; }
         goto val_end;
     }
     if (val_type == YYJSON_TYPE_NUM) {
         incr_len(32);
         cur = write_number(cur, val, flg);
         if (unlikely(!cur)) goto fail_num;
-        *cur++ = ',';
+        *cur++ = ','; *cur++ = ' ';
         goto val_end;
     }
     if ((val_type & (YYJSON_TYPE_ARR & YYJSON_TYPE_OBJ)) ==
@@ -8497,7 +8498,7 @@ val_begin:
             /* write empty container */
             *cur++ = (u8)('[' | ((u8)ctn_obj_tmp << 5));
             *cur++ = (u8)(']' | ((u8)ctn_obj_tmp << 5));
-            *cur++ = ',';
+            *cur++ = ','; *cur++ = ' ';
             goto val_end;
         } else {
             /* push context, setup new container */
@@ -8512,13 +8513,13 @@ val_begin:
     if (val_type == YYJSON_TYPE_BOOL) {
         incr_len(16);
         cur = write_bool(cur, unsafe_yyjson_get_bool(val));
-        cur++;
+        cur++; *cur++ = ' ';
         goto val_end;
     }
     if (val_type == YYJSON_TYPE_NULL) {
         incr_len(16);
         cur = write_null(cur);
-        cur++;
+        cur++; *cur++ = ' ';
         goto val_end;
     }
     if (val_type == YYJSON_TYPE_RAW) {
@@ -8527,7 +8528,7 @@ val_begin:
         check_str_len(str_len);
         incr_len(str_len + 2);
         cur = write_raw(cur, str_ptr, str_len);
-        *cur++ = ',';
+        *cur++ = ','; *cur++ = ' ';
         goto val_end;
     }
     goto fail_type;
@@ -8539,9 +8540,9 @@ val_end:
     goto val_begin;
 
 ctn_end:
-    cur--;
+    cur -= 2;
     *cur++ = (u8)(']' | ((u8)ctn_obj << 5));
-    *cur++ = ',';
+    *cur++ = ','; *cur++ = ' ';
     if (unlikely((u8 *)ctx >= end)) goto doc_end;
     yyjson_write_ctx_get(ctx++, &ctn_len, &ctn_obj);
     ctn_len--;
@@ -8552,12 +8553,11 @@ ctn_end:
     }
 
 doc_end:
+    cur -= 2;
     if (newline) {
-        incr_len(2);
-        *(cur - 1) = '\n';
-        cur++;
+        *cur++ = '\n';
     }
-    *--cur = '\0';
+    *cur = '\0';
     *dat_len = (usize)(cur - hdr);
     memset(err, 0, sizeof(yyjson_write_err));
     return hdr;
@@ -9031,14 +9031,15 @@ val_begin:
             cur = write_string(cur, esc, inv, str_ptr, str_len, enc_table);
             if (unlikely(!cur)) goto fail_str;
         }
-        *cur++ = is_key ? ':' : ',';
+        if (is_key) { *cur++ = ':'; *cur++ = ' '; }
+        else { *cur++ = ','; *cur++ = ' '; }
         goto val_end;
     }
     if (val_type == YYJSON_TYPE_NUM) {
         incr_len(32);
         cur = write_number(cur, (yyjson_val *)val, flg);
         if (unlikely(!cur)) goto fail_num;
-        *cur++ = ',';
+        *cur++ = ','; *cur++ = ' ';
         goto val_end;
     }
     if ((val_type & (YYJSON_TYPE_ARR & YYJSON_TYPE_OBJ)) ==
@@ -9050,7 +9051,7 @@ val_begin:
             /* write empty container */
             *cur++ = (u8)('[' | ((u8)ctn_obj_tmp << 5));
             *cur++ = (u8)(']' | ((u8)ctn_obj_tmp << 5));
-            *cur++ = ',';
+            *cur++ = ','; *cur++ = ' ';
             goto val_end;
         } else {
             /* push context, setup new container */
@@ -9067,13 +9068,13 @@ val_begin:
     if (val_type == YYJSON_TYPE_BOOL) {
         incr_len(16);
         cur = write_bool(cur, unsafe_yyjson_get_bool(val));
-        cur++;
+        cur++; *cur++ = ' ';
         goto val_end;
     }
     if (val_type == YYJSON_TYPE_NULL) {
         incr_len(16);
         cur = write_null(cur);
-        cur++;
+        cur++; *cur++ = ' ';
         goto val_end;
     }
     if (val_type == YYJSON_TYPE_RAW) {
@@ -9082,7 +9083,7 @@ val_begin:
         check_str_len(str_len);
         incr_len(str_len + 2);
         cur = write_raw(cur, str_ptr, str_len);
-        *cur++ = ',';
+        *cur++ = ','; *cur++ = ' ';
         goto val_end;
     }
     goto fail_type;
@@ -9094,9 +9095,9 @@ val_end:
     goto val_begin;
 
 ctn_end:
-    cur--;
+    cur -= 2;
     *cur++ = (u8)(']' | ((u8)ctn_obj << 5));
-    *cur++ = ',';
+    *cur++ = ','; *cur++ = ' ';
     if (unlikely((u8 *)ctx >= end)) goto doc_end;
     val = ctn->next;
     yyjson_mut_write_ctx_get(ctx++, &ctn, &ctn_len, &ctn_obj);
@@ -9108,12 +9109,11 @@ ctn_end:
     }
 
 doc_end:
+    cur -= 2;
     if (newline) {
-        incr_len(2);
-        *(cur - 1) = '\n';
-        cur++;
+        *cur++ = '\n';
     }
-    *--cur = '\0';
+    *cur = '\0';
     *dat_len = (usize)(cur - hdr);
     err->code = YYJSON_WRITE_SUCCESS;
     err->msg = "success";
