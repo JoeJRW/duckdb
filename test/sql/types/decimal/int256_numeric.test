@@ -1,0 +1,597 @@
+# name: test/sql/types/decimal/int256_numeric.test
+# description: Numeric/math scalar functions on DECIMAL(p>38) backed by PhysicalType::INT256.
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+# ===========================================================================
+# abs(DECIMAL) — direct DECIMAL overload, DecimalUnaryOpBind with INT256
+# ===========================================================================
+
+# abs: positive value
+query I
+SELECT abs(CAST(42.5 AS DECIMAL(50,10)));
+----
+42.5000000000
+
+# abs: negative value
+query I
+SELECT abs(CAST(-42.5 AS DECIMAL(50,10)));
+----
+42.5000000000
+
+# abs: zero
+query I
+SELECT abs(CAST(0 AS DECIMAL(50,10)));
+----
+0.0000000000
+
+# abs: large value near INT256 range
+query I
+SELECT abs(CAST('-123456789012345678901234567890.1234567890' AS DECIMAL(50,10)));
+----
+123456789012345678901234567890.1234567890
+
+# abs: return type should still be DECIMAL(50,10)
+query I
+SELECT typeof(abs(CAST(-1 AS DECIMAL(50,10))));
+----
+DECIMAL(50,10)
+
+# ===========================================================================
+# ceil(DECIMAL) — BindGenericRoundFunctionDecimal with INT256
+# ===========================================================================
+
+# ceil: positive fractional
+query I
+SELECT ceil(CAST(42.3 AS DECIMAL(50,10)));
+----
+43
+
+# ceil: negative fractional
+query I
+SELECT ceil(CAST(-42.3 AS DECIMAL(50,10)));
+----
+-42
+
+# ceil: exact integer
+query I
+SELECT ceil(CAST(42.0 AS DECIMAL(50,10)));
+----
+42
+
+# ceil: zero
+query I
+SELECT ceil(CAST(0 AS DECIMAL(50,10)));
+----
+0
+
+# ceil: large value
+query I
+SELECT ceil(CAST('123456789012345678901234567890.1' AS DECIMAL(50,10)));
+----
+123456789012345678901234567891
+
+# ceil: return type is DECIMAL(50,0)
+query I
+SELECT typeof(ceil(CAST(1.5 AS DECIMAL(50,10))));
+----
+DECIMAL(50,0)
+
+# ===========================================================================
+# floor(DECIMAL) — BindGenericRoundFunctionDecimal with INT256
+# ===========================================================================
+
+# floor: positive fractional
+query I
+SELECT floor(CAST(42.7 AS DECIMAL(50,10)));
+----
+42
+
+# floor: negative fractional
+query I
+SELECT floor(CAST(-42.7 AS DECIMAL(50,10)));
+----
+-43
+
+# floor: exact integer
+query I
+SELECT floor(CAST(42.0 AS DECIMAL(50,10)));
+----
+42
+
+# floor: zero
+query I
+SELECT floor(CAST(0 AS DECIMAL(50,10)));
+----
+0
+
+# floor: large value
+query I
+SELECT floor(CAST('123456789012345678901234567890.9' AS DECIMAL(50,10)));
+----
+123456789012345678901234567890
+
+# floor: return type is DECIMAL(50,0)
+query I
+SELECT typeof(floor(CAST(1.5 AS DECIMAL(50,10))));
+----
+DECIMAL(50,0)
+
+# ===========================================================================
+# round(DECIMAL) — 1-arg, BindGenericRoundFunctionDecimal with INT256
+# ===========================================================================
+
+# round: tie breaks away from zero (positive)
+query I
+SELECT round(CAST(42.5 AS DECIMAL(50,10)));
+----
+43
+
+# round: tie breaks away from zero (negative)
+query I
+SELECT round(CAST(-42.5 AS DECIMAL(50,10)));
+----
+-43
+
+# round: below midpoint
+query I
+SELECT round(CAST(42.4 AS DECIMAL(50,10)));
+----
+42
+
+# round: above midpoint
+query I
+SELECT round(CAST(42.6 AS DECIMAL(50,10)));
+----
+43
+
+# round: zero
+query I
+SELECT round(CAST(0 AS DECIMAL(50,10)));
+----
+0
+
+# round: large value
+query I
+SELECT round(CAST('123456789012345678901234567890.5' AS DECIMAL(50,10)));
+----
+123456789012345678901234567891
+
+# round: return type is DECIMAL(50,0)
+query I
+SELECT typeof(round(CAST(1.5 AS DECIMAL(50,10))));
+----
+DECIMAL(50,0)
+
+# ===========================================================================
+# round(DECIMAL, INT) — 2-arg, BindDecimalRoundPrecision with INT256
+# NOTE: BindDecimalRoundPrecision default case still uses hugeint_t, not int256_t.
+#       round(DECIMAL(p>38), INT) with non-noop precision is NOT yet supported.
+#       Only the no-op case (precision >= scale) works.
+# ===========================================================================
+
+# round: precision >= scale is a no-op (works because no callback is invoked)
+query I
+SELECT round(CAST(42.5678 AS DECIMAL(50,10)), 10);
+----
+42.5678000000
+
+# TODO: the following should work once BindDecimalRoundPrecision handles INT256:
+# SELECT round(CAST(42.5678 AS DECIMAL(50,10)), 2);  -- expected: 42.5700000000
+# SELECT round(CAST(42.5 AS DECIMAL(50,10)), 0);     -- expected: 43
+# SELECT round(CAST(12345.6789 AS DECIMAL(50,10)), -2); -- expected: 12300
+
+# ===========================================================================
+# trunc(DECIMAL) — 1-arg, BindGenericRoundFunctionDecimal with INT256
+# ===========================================================================
+
+# trunc: positive
+query I
+SELECT trunc(CAST(42.9 AS DECIMAL(50,10)));
+----
+42
+
+# trunc: negative (truncates toward zero)
+query I
+SELECT trunc(CAST(-42.9 AS DECIMAL(50,10)));
+----
+-42
+
+# trunc: zero
+query I
+SELECT trunc(CAST(0 AS DECIMAL(50,10)));
+----
+0
+
+# trunc: large value
+query I
+SELECT trunc(CAST('123456789012345678901234567890.9999999999' AS DECIMAL(50,10)));
+----
+123456789012345678901234567890
+
+# trunc: return type is DECIMAL(50,0)
+query I
+SELECT typeof(trunc(CAST(1.5 AS DECIMAL(50,10))));
+----
+DECIMAL(50,0)
+
+# ===========================================================================
+# trunc(DECIMAL, INT) — 2-arg, BindDecimalRoundPrecision with INT256
+# NOTE: Same issue as round — BindDecimalRoundPrecision default uses hugeint_t.
+#       trunc(DECIMAL(p>38), INT) with non-noop precision is NOT yet supported.
+# ===========================================================================
+
+# TODO: the following should work once BindDecimalRoundPrecision handles INT256:
+# SELECT trunc(CAST(42.5678 AS DECIMAL(50,10)), 2);    -- expected: 42.5600000000
+# SELECT trunc(CAST(42.9 AS DECIMAL(50,10)), 0);       -- expected: 42
+# SELECT trunc(CAST(12345.6789 AS DECIMAL(50,10)), -2); -- expected: 12300
+
+# ===========================================================================
+# Vectorized path: table columns with NULL handling
+# ===========================================================================
+
+statement ok
+CREATE TABLE dec256(v DECIMAL(50,10));
+
+statement ok
+INSERT INTO dec256 VALUES
+    (CAST(42.5 AS DECIMAL(50,10))),
+    (CAST(-42.5 AS DECIMAL(50,10))),
+    (CAST(0 AS DECIMAL(50,10))),
+    (CAST('123456789012345678901234567890.1234567890' AS DECIMAL(50,10))),
+    (NULL);
+
+# abs on column
+query I
+SELECT abs(v) FROM dec256 ORDER BY v NULLS LAST;
+----
+42.5000000000
+0.0000000000
+42.5000000000
+123456789012345678901234567890.1234567890
+NULL
+
+# ceil on column
+query I
+SELECT ceil(v) FROM dec256 ORDER BY v NULLS LAST;
+----
+-42
+0
+43
+123456789012345678901234567891
+NULL
+
+# floor on column
+query I
+SELECT floor(v) FROM dec256 ORDER BY v NULLS LAST;
+----
+-43
+0
+42
+123456789012345678901234567890
+NULL
+
+# round on column
+query I
+SELECT round(v) FROM dec256 ORDER BY v NULLS LAST;
+----
+-43
+0
+43
+123456789012345678901234567890
+NULL
+
+# trunc on column
+query I
+SELECT trunc(v) FROM dec256 ORDER BY v NULLS LAST;
+----
+-42
+0
+42
+123456789012345678901234567890
+NULL
+
+statement ok
+DROP TABLE dec256;
+
+# ===========================================================================
+# sign(DECIMAL) — DECIMAL skipped, implicit cast to DOUBLE
+# ===========================================================================
+
+query I
+SELECT sign(CAST(42.5 AS DECIMAL(50,10)));
+----
+1
+
+query I
+SELECT sign(CAST(-42.5 AS DECIMAL(50,10)));
+----
+-1
+
+query I
+SELECT sign(CAST(0 AS DECIMAL(50,10)));
+----
+0
+
+# ===========================================================================
+# exp / ln / log / log2 / log10 — implicit cast from DECIMAL(50,10) to DOUBLE
+# ===========================================================================
+
+# exp(1) ≈ 2.718281828459045
+query I
+SELECT round(exp(CAST(1 AS DECIMAL(50,10))), 6);
+----
+2.718282
+
+# exp(0) = 1
+query I
+SELECT exp(CAST(0 AS DECIMAL(50,10)));
+----
+1.0
+
+# ln(1) = 0
+query I
+SELECT ln(CAST(1 AS DECIMAL(50,10)));
+----
+0.0
+
+# ln(e) ≈ 1
+query I
+SELECT round(ln(CAST(2.718281828459045 AS DECIMAL(50,10))), 6);
+----
+1.0
+
+# log10(100) = 2
+query I
+SELECT log10(CAST(100 AS DECIMAL(50,10)));
+----
+2.0
+
+# log2(8) = 3
+query I
+SELECT log2(CAST(8 AS DECIMAL(50,10)));
+----
+3.0
+
+# log with base: log(10, 1000) = 3
+query I
+SELECT round(log(CAST(10 AS DECIMAL(50,10)), CAST(1000 AS DECIMAL(50,10))), 6);
+----
+3.0
+
+# ===========================================================================
+# pow / sqrt / cbrt — implicit cast from DECIMAL to DOUBLE
+# ===========================================================================
+
+# pow(2, 10) = 1024
+query I
+SELECT pow(CAST(2 AS DECIMAL(50,10)), CAST(10 AS DECIMAL(50,10)));
+----
+1024.0
+
+# sqrt(4) = 2
+query I
+SELECT sqrt(CAST(4 AS DECIMAL(50,10)));
+----
+2.0
+
+# sqrt(2) ≈ 1.414214
+query I
+SELECT round(sqrt(CAST(2 AS DECIMAL(50,10))), 6);
+----
+1.414214
+
+# cbrt(27) = 3
+query I
+SELECT round(cbrt(CAST(27 AS DECIMAL(50,10))), 6);
+----
+3.0
+
+# cbrt(-8) = -2
+query I
+SELECT round(cbrt(CAST(-8 AS DECIMAL(50,10))), 6);
+----
+-2.0
+
+# ===========================================================================
+# Trigonometric functions — implicit cast from DECIMAL to DOUBLE
+# ===========================================================================
+
+# sin(0) = 0
+query I
+SELECT sin(CAST(0 AS DECIMAL(50,10)));
+----
+0.0
+
+# cos(0) = 1
+query I
+SELECT cos(CAST(0 AS DECIMAL(50,10)));
+----
+1.0
+
+# tan(0) = 0
+query I
+SELECT tan(CAST(0 AS DECIMAL(50,10)));
+----
+0.0
+
+# asin(0) = 0
+query I
+SELECT asin(CAST(0 AS DECIMAL(50,10)));
+----
+0.0
+
+# acos(1) = 0
+query I
+SELECT acos(CAST(1 AS DECIMAL(50,10)));
+----
+0.0
+
+# atan(0) = 0
+query I
+SELECT atan(CAST(0 AS DECIMAL(50,10)));
+----
+0.0
+
+# atan2(0, 1) = 0
+query I
+SELECT atan2(CAST(0 AS DECIMAL(50,10)), CAST(1 AS DECIMAL(50,10)));
+----
+0.0
+
+# cot: cot(1) ≈ 0.642093
+query I
+SELECT round(cot(CAST(1 AS DECIMAL(50,10))), 6);
+----
+0.642093
+
+# ===========================================================================
+# Hyperbolic functions — implicit cast from DECIMAL to DOUBLE
+# ===========================================================================
+
+# sinh(0) = 0
+query I
+SELECT sinh(CAST(0 AS DECIMAL(50,10)));
+----
+0.0
+
+# cosh(0) = 1
+query I
+SELECT cosh(CAST(0 AS DECIMAL(50,10)));
+----
+1.0
+
+# tanh(0) = 0
+query I
+SELECT tanh(CAST(0 AS DECIMAL(50,10)));
+----
+0.0
+
+# asinh(0) = 0
+query I
+SELECT asinh(CAST(0 AS DECIMAL(50,10)));
+----
+0.0
+
+# acosh(1) = 0
+query I
+SELECT acosh(CAST(1 AS DECIMAL(50,10)));
+----
+0.0
+
+# atanh(0) = 0
+query I
+SELECT atanh(CAST(0 AS DECIMAL(50,10)));
+----
+0.0
+
+# ===========================================================================
+# degrees / radians — implicit cast from DECIMAL to DOUBLE
+# ===========================================================================
+
+# degrees(pi) ≈ 180
+query I
+SELECT round(degrees(CAST(3.141592653589793 AS DECIMAL(50,10))), 6);
+----
+180.0
+
+# radians(180) ≈ pi
+query I
+SELECT round(radians(CAST(180 AS DECIMAL(50,10))), 6);
+----
+3.141593
+
+# ===========================================================================
+# even — implicit cast from DECIMAL to DOUBLE
+# ===========================================================================
+
+# even(1.5) = 2 (ceil to nearest even)
+query I
+SELECT even(CAST(1.5 AS DECIMAL(50,10)));
+----
+2.0
+
+# even(2.5) = 4
+query I
+SELECT even(CAST(2.5 AS DECIMAL(50,10)));
+----
+4.0
+
+# even(-1.5) = -2
+query I
+SELECT even(CAST(-1.5 AS DECIMAL(50,10)));
+----
+-2.0
+
+# ===========================================================================
+# gamma / lgamma — implicit cast from DECIMAL to DOUBLE
+# ===========================================================================
+
+# gamma(5) = 4! = 24
+query I
+SELECT round(gamma(CAST(5 AS DECIMAL(50,10))), 6);
+----
+24.0
+
+# lgamma(1) = 0
+query I
+SELECT round(lgamma(CAST(1 AS DECIMAL(50,10))), 6);
+----
+0.0
+
+# ===========================================================================
+# Edge case: DECIMAL(50,10) with scale=0 (ceil/floor/round/trunc should be no-op)
+# ===========================================================================
+
+query I
+SELECT ceil(CAST(42 AS DECIMAL(50,0)));
+----
+42
+
+query I
+SELECT floor(CAST(42 AS DECIMAL(50,0)));
+----
+42
+
+query I
+SELECT round(CAST(42 AS DECIMAL(50,0)));
+----
+42
+
+query I
+SELECT trunc(CAST(42 AS DECIMAL(50,0)));
+----
+42
+
+# ===========================================================================
+# Edge case: DECIMAL with maximum supported precision (76)
+# ===========================================================================
+
+# abs of large DECIMAL(76,0)
+query I
+SELECT abs(CAST('-9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)));
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+# ceil/floor/round/trunc on integer DECIMAL(76,0) should be no-op
+query I
+SELECT ceil(CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)));
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+query I
+SELECT floor(CAST('-9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)));
+----
+-9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+query I
+SELECT round(CAST('9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)));
+----
+9999999999999999999999999999999999999999999999999999999999999999999999999999
+
+query I
+SELECT trunc(CAST('-9999999999999999999999999999999999999999999999999999999999999999999999999999' AS DECIMAL(76,0)));
+----
+-9999999999999999999999999999999999999999999999999999999999999999999999999999

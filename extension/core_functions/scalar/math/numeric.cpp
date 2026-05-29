@@ -154,8 +154,11 @@ static unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, Scala
 	case PhysicalType::INT64:
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::BIGINT));
 		break;
-	default:
+	case PhysicalType::INT128:
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT));
+		break;
+	default:
+		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::INT256));
 		break;
 	}
 	bound_function.arguments[0] = decimal_type;
@@ -361,8 +364,11 @@ static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &c
 		case PhysicalType::INT64:
 			bound_function.SetFunctionCallback(GenericRoundFunctionDecimal<int64_t, NumericHelper, OP>);
 			break;
-		default:
+		case PhysicalType::INT128:
 			bound_function.SetFunctionCallback(GenericRoundFunctionDecimal<hugeint_t, Hugeint, OP>);
+			break;
+		default:
+			bound_function.SetFunctionCallback(GenericRoundFunctionDecimal<int256_t, Int256, OP>);
 			break;
 		}
 	}
@@ -533,8 +539,11 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 		case PhysicalType::INT64:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int64_t, NumericHelper, NEGOP>);
 			break;
-		default:
+		case PhysicalType::INT128:
 			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, NEGOP>);
+			break;
+		default:
+			bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int256_t, Int256, NEGOP>);
 			break;
 		}
 	} else {
@@ -554,8 +563,11 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 			case PhysicalType::INT64:
 				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int64_t, NumericHelper, POSOP>);
 				break;
-			default:
+			case PhysicalType::INT128:
 				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<hugeint_t, Hugeint, POSOP>);
+				break;
+			default:
+				bound_function.SetFunctionCallback(GenericRoundPrecisionDecimal<int256_t, Int256, POSOP>);
 				break;
 			}
 		}
