@@ -1160,6 +1160,14 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 
 template <class OP>
 static bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+	if (left.IsJSONType() && !right.IsJSONType()) {
+		result = LogicalType(LogicalTypeId::VARCHAR);
+		return true;
+	}
+	if (right.IsJSONType() && !left.IsJSONType()) {
+		result = LogicalType(LogicalTypeId::VARCHAR);
+		return true;
+	}
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
 		result = left;

@@ -140,9 +140,9 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 	}
 	case LogicalTypeId::VARCHAR:
 		// for comparison with strings, we prefer to bind to the numeric types
-		if (left_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(left_type)) {
+		if (left_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(left_type) && !right_type.IsJSONType()) {
 			res = LogicalType::NormalizeType(left_type);
-		} else if (right_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(right_type)) {
+		} else if (right_type.id() != LogicalTypeId::VARCHAR && SwitchVarcharComparison(right_type) && !left_type.IsJSONType()) {
 			res = LogicalType::NormalizeType(right_type);
 		} else {
 			// else: check if collations are compatible
