@@ -192,6 +192,9 @@ AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &typ
 	case PhysicalType::INT128:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, hugeint_t, hugeint_t,
 		                                                   ApproxQuantileScalarOperation>(type, type);
+	case PhysicalType::INT256:
+		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, int256_t, int256_t,
+		                                                   ApproxQuantileScalarOperation>(type, type);
 	case PhysicalType::FLOAT:
 		return AggregateFunction::UnaryAggregateDestructor<ApproxQuantileState, float, float,
 		                                                   ApproxQuantileScalarOperation>(type, type);
@@ -215,6 +218,8 @@ AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const LogicalTy
 		return GetApproximateQuantileAggregateFunction(LogicalType::BIGINT);
 	case PhysicalType::INT128:
 		return GetApproximateQuantileAggregateFunction(LogicalType::HUGEINT);
+	case PhysicalType::INT256:
+		return GetApproximateQuantileAggregateFunction(type);
 	default:
 		throw InternalException("Unimplemented quantile decimal aggregate");
 	}
@@ -379,6 +384,8 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 			return GetTypedApproxQuantileListAggregateFunction<int64_t, int64_t>(type);
 		case PhysicalType::INT128:
 			return GetTypedApproxQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
+		case PhysicalType::INT256:
+			return GetTypedApproxQuantileListAggregateFunction<int256_t, int256_t>(type);
 		default:
 			throw NotImplementedException("Unimplemented approximate quantile list decimal aggregate");
 		}
@@ -452,6 +459,7 @@ AggregateFunctionSet ApproxQuantileFun::GetFunctions() {
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::INTEGER));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::BIGINT));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::HUGEINT));
+	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::INT256));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::DOUBLE));
 
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::DATE));

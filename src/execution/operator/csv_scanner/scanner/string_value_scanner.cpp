@@ -407,6 +407,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 				    value_ptr, size, static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
 				break;
+			case PhysicalType::INT256:
+				success = TryDecimalStringCast<int256_t, ','>(
+				    value_ptr, size, static_cast<int256_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				    parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
 			default:
 				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
 				                        TypeIdToString(parse_types[chunk_col_id].internal_type));
@@ -432,6 +437,11 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			case PhysicalType::INT128:
 				success = TryDecimalStringCast(value_ptr, size,
 				                               static_cast<hugeint_t *>(vector_ptr[chunk_col_id])[number_of_rows],
+				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
+				break;
+			case PhysicalType::INT256:
+				success = TryDecimalStringCast(value_ptr, size,
+				                               static_cast<int256_t *>(vector_ptr[chunk_col_id])[number_of_rows],
 				                               parse_types[chunk_col_id].width, parse_types[chunk_col_id].scale);
 				break;
 			default:

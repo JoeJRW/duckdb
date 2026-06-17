@@ -217,6 +217,11 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 				return TryDecimalStringCast<hugeint_t, ','>(value_ptr, value_size, dummy_value, width, scale);
 			}
 
+			case PhysicalType::INT256: {
+				int256_t dummy_value;
+				return TryDecimalStringCast<int256_t, ','>(value_ptr, value_size, dummy_value, width, scale);
+			}
+
 			default:
 				throw InternalException("Invalid Physical Type for Decimal Value. Physical Type: " +
 				                        TypeIdToString(type.InternalType()));
@@ -241,6 +246,11 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 
 			case PhysicalType::INT128: {
 				hugeint_t dummy_value;
+				return TryDecimalStringCast(value_ptr, value_size, dummy_value, width, scale);
+			}
+
+			case PhysicalType::INT256: {
+				int256_t dummy_value;
 				return TryDecimalStringCast(value_ptr, value_size, dummy_value, width, scale);
 			}
 

@@ -906,6 +906,8 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 			return TransformDecimal<int64_t>(vals, result, count, width, scale, options);
 		case PhysicalType::INT128:
 			return TransformDecimal<hugeint_t>(vals, result, count, width, scale, options);
+		case PhysicalType::INT256:
+			return TransformDecimal<int256_t>(vals, result, count, width, scale, options);
 		default:
 			throw InternalException("Unimplemented physical type for decimal");
 		}

@@ -128,6 +128,8 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		case PhysicalType::INT128:
 			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 			break;
+		case PhysicalType::INT256:
+			throw NotImplementedException("Unsupported internal decimal type");
 		default:
 			throw InternalException("Unsupported internal decimal type");
 		}
