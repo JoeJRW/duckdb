@@ -49,6 +49,11 @@ struct UnifiedVectorFormat {
 		D_ASSERT(StorageTypeCompatible<T>(physical_type));
 #else
 		if (!StorageTypeCompatible<T>(physical_type)) {
+			if (physical_type == PhysicalType::INT256 || GetTypeId<T>() == PhysicalType::INT256) {
+				throw TypeMismatchException(GetTypeId<T>(), physical_type,
+				                            "Expected unified vector format of type " + TypeIdToString(GetTypeId<T>()) +
+				                                ", but found type " + TypeIdToString(physical_type));
+			}
 			throw InternalException("Expected unified vector format of type %s, but found type %s", GetTypeId<T>(),
 			                        physical_type);
 		}
@@ -337,6 +342,12 @@ struct ConstantVector {
 		D_ASSERT(StorageTypeCompatible<T>(vector.GetType().InternalType()));
 #else
 		if (!StorageTypeCompatible<T>(vector.GetType().InternalType())) {
+			auto actual_type = vector.GetType().InternalType();
+			if (actual_type == PhysicalType::INT256 || GetTypeId<T>() == PhysicalType::INT256) {
+				throw TypeMismatchException(GetTypeId<T>(), actual_type,
+				                            "Expected vector of type " + TypeIdToString(GetTypeId<T>()) +
+				                                ", but found vector of type " + TypeIdToString(actual_type));
+			}
 			throw InternalException("Expected vector of type %s, but found vector of type %s", GetTypeId<T>(),
 			                        vector.GetType().InternalType());
 		}
