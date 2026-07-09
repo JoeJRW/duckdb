@@ -18,6 +18,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/rds_mystack.hpp"
 #include "duckdb/common/thread.hpp"
 
 namespace duckdb {
@@ -68,6 +69,7 @@ void DuckTransactionManager::ShutdownBackgroundCheckpoint() {
 }
 
 void DuckTransactionManager::BackgroundCheckpointLoop() {
+	RDSMystackThreadGuard mystack_guard("duckdb_ckpt");
 	idx_t concurrent_checkpoint_count = 0;
 	while (true) {
 		CheckpointOptions options;

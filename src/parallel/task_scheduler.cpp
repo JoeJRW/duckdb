@@ -8,6 +8,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/block_allocator.hpp"
 #ifndef DUCKDB_NO_THREADS
+#include "duckdb/common/rds_mystack.hpp"
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
 #include "lightweightsemaphore.h"
@@ -401,6 +402,7 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 
 #ifndef DUCKDB_NO_THREADS
 static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
+	RDSMystackThreadGuard mystack_guard("duckdb_worker");
 	scheduler->ExecuteForever(marker);
 }
 #endif
