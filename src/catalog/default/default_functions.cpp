@@ -205,7 +205,6 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "locate", {"substr", "str", nullptr}, {{nullptr, nullptr}}, "position(substr IN str)"},
 	{DEFAULT_SCHEMA, "locate", {"substr", "str", "pos", nullptr}, {{nullptr, nullptr}}, "position(substr IN str[pos:]) + if(position(substr IN str[pos:]), pos - 1, 0)"},
 	{DEFAULT_SCHEMA, "strcmp", {"expr1", "expr2", nullptr}, {{nullptr, nullptr}}, "if(expr1 is null or expr2 is null, null, if(cast(expr1 as char) >= cast(expr2 as char), if(cast(expr1 as char) = cast(expr2 as char), 0, 1), -1))"},
-	{DEFAULT_SCHEMA, "substring_index", {"expr1", "sep", "index", nullptr}, {{nullptr, nullptr}}, "if(expr1 is null or sep is null or index is null, null, if(index != 0, if((index > 0), list_reduce((split(expr1, sep)[:index]), (ret, x)->concat_ws(sep, ret, x)), list_reduce((split(expr1, sep)[index:]), (ret, x)->concat_ws(sep, ret, x))), ''))"},
 	{DEFAULT_SCHEMA, "space", {"num", nullptr}, {{nullptr, nullptr}}, "repeat(' ', cast(num as double))"},
 	{DEFAULT_SCHEMA, "insert", {"str", "pos", "len", "newstr", nullptr}, {{nullptr, nullptr}}, "if(str is null or pos is null or len is null or newstr is null, null, if(pos between 1 and length(str), concat(cast(str as varchar)[:pos - 1], cast(newstr as varchar), cast(str as varchar)[pos+len:]), str))"},
 	{DEFAULT_SCHEMA, "not_regexp_like", {"str", "pattern", nullptr}, {{nullptr, nullptr}}, "not regexp_like(str, pattern)"},
