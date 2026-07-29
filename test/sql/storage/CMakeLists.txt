@@ -7,6 +7,7 @@ add_library_unity(
   test_storage.cpp
   test_database_size.cpp
   wal_checkpoint_marker.cpp
+  wal_prescan.cpp
   wal_torn_write.cpp
   union_all_with_allow_stream.cpp)
 set(ALL_OBJECT_FILES
