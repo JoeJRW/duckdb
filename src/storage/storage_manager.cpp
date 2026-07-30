@@ -7,6 +7,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -707,7 +708,12 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			checkpointer->CreateCheckpoint();
 
 		} catch (std::exception &ex) {
+			// a checkpoint failure may leave in-memory / WAL state half-updated -> invalidate the database
+			// so we do not keep running on corrupted state. This is the single choke point that all callers
+			// (explicit CHECKPOINT, background loop, sync commit) funnel through, and it runs before any of
+			// them can swallow the error. Recovery is via restart (disk root + WAL replay).
 			ErrorData error(ex);
+			ValidChecker::Invalidate(db.GetDatabase(), error.Message());
 			throw FatalException("Failed to create checkpoint because of error: %s", error.Message());
 		}
 	}
