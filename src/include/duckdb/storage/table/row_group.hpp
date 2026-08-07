@@ -213,6 +213,10 @@ public:
 	idx_t GetColumnCount() const;
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
+	//! Attempts to compress the version information of the row group
+	//! Per-row insert/delete ids that behave identically for all transactions with a start time of at least
+	//! lowest_active_start (i.e. all active and future transactions) are compressed into constants
+	void CompressVersionInfo(transaction_t lowest_active_start);
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
