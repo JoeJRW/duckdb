@@ -2,15 +2,49 @@
 
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/temporary_file_manager.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+TEST_CASE("Test cleanup of orphaned temporary files", "[storage]") {
+	LocalFileSystem fs;
+	auto temp_directory = TestCreatePath("orphaned_temporary_files");
+	if (fs.DirectoryExists(temp_directory)) {
+		fs.RemoveDirectory(temp_directory);
+	}
+	fs.CreateDirectory(temp_directory);
+
+	duckdb::vector<string> orphan_files {"duckdb_temp_storage_DEFAULT-0.tmp", "duckdb_temp_block-1.block"};
+	for (const auto &file : orphan_files) {
+		auto path = fs.JoinPath(temp_directory, file);
+		fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		REQUIRE(fs.FileExists(path));
+	}
+	auto unrelated_file = fs.JoinPath(temp_directory, "unrelated.tmp");
+	fs.OpenFile(unrelated_file, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+
+	{
+		DuckDB db(nullptr);
+		atomic<idx_t> size_on_disk {0};
+		TemporaryDirectoryHandle handle(*db.instance, temp_directory, size_on_disk, optional_idx());
+
+		for (const auto &file : orphan_files) {
+			REQUIRE_FALSE(fs.FileExists(fs.JoinPath(temp_directory, file)));
+		}
+		REQUIRE(fs.FileExists(unrelated_file));
+	}
+
+	fs.RemoveFile(unrelated_file);
+	fs.RemoveDirectory(temp_directory);
+}
 
 TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storage][.]") {
 	duckdb::unique_ptr<MaterializedQueryResult> result;

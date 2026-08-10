@@ -721,6 +721,16 @@ void TemporaryFileManager::EraseFileHandle(TemporaryFileManagerLock &, const Tem
 //===--------------------------------------------------------------------===//
 // TemporaryDirectoryHandle
 //===--------------------------------------------------------------------===//
+static void RemoveTemporaryFiles(FileSystem &fs, const string &temp_directory) {
+	vector<string> files_to_delete;
+	fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
+		if (!isdir && StringUtil::StartsWith(path, "duckdb_temp_")) {
+			files_to_delete.push_back(fs.JoinPath(temp_directory, path));
+		}
+	});
+	fs.RemoveFiles(files_to_delete);
+}
+
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p, atomic<idx_t> &size_on_disk,
                                                    optional_idx max_swap_space)
     : db(db), temp_directory(std::move(path_p)),
@@ -730,6 +740,8 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 	if (!fs.DirectoryExists(temp_directory)) {
 		fs.CreateDirectory(temp_directory);
 		created_directory = true;
+	} else {
+		RemoveTemporaryFiles(fs, temp_directory);
 	}
 	temp_file->SetMaxSwapSpace(max_swap_space);
 }
@@ -740,32 +752,11 @@ TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 	// then delete the temporary file directory
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
-		bool delete_directory = created_directory;
-		vector<string> files_to_delete;
-		if (!created_directory) {
-			bool deleted_everything = true;
-			fs.ListFiles(temp_directory, [&](const string &path, bool isdir) {
-				if (isdir) {
-					deleted_everything = false;
-					return;
-				}
-				if (!StringUtil::StartsWith(path, "duckdb_temp_")) {
-					deleted_everything = false;
-					return;
-				}
-				files_to_delete.push_back(path);
-			});
-		}
-		if (delete_directory) {
+		if (created_directory) {
 			// we want to remove all files in the directory
 			fs.RemoveDirectory(temp_directory);
 		} else {
-			vector<string> full_path_files_to_delete;
-			full_path_files_to_delete.reserve(files_to_delete.size());
-			for (auto &file : files_to_delete) {
-				full_path_files_to_delete.push_back(fs.JoinPath(temp_directory, file));
-			}
-			fs.RemoveFiles(full_path_files_to_delete);
+			RemoveTemporaryFiles(fs, temp_directory);
 		}
 	}
 }
