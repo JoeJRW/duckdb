@@ -1,0 +1,117 @@
+# name: test/sql/storage/wal/wal_replay_ddl_after_dml.test
+# description: Test WAL replay of DML that follows an ALTER within the same transaction
+# group: [wal]
+
+require skip_reload
+
+load __TEST_DIR__/wal_replay_ddl_after_dml.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE t(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1, 10), (2, 20);
+
+# The UPDATE emits a USE_TABLE for the two-column catalog entry. The ALTERs replace that entry without emitting a new
+# USE_TABLE, so replaying the trailing UPDATE must not resolve against the superseded entry.
+statement ok
+BEGIN
+
+statement ok
+UPDATE t SET b = b + 1
+
+statement ok
+ALTER TABLE t ADD COLUMN c INTEGER DEFAULT 0
+
+statement ok
+ALTER TABLE t ADD COLUMN d INTEGER DEFAULT 0
+
+statement ok
+UPDATE t SET d = d + 5
+
+statement ok
+COMMIT
+
+restart
+
+query IIII
+SELECT * FROM t ORDER BY a
+----
+1	11	0	5
+2	21	0	5
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# DROP COLUMN renumbers the physical columns, so the trailing UPDATE also depends on the refreshed entry
+statement ok
+BEGIN
+
+statement ok
+UPDATE t SET c = c + 1
+
+statement ok
+ALTER TABLE t DROP COLUMN b
+
+statement ok
+UPDATE t SET d = d + 1
+
+statement ok
+COMMIT
+
+restart
+
+query III
+SELECT * FROM t ORDER BY a
+----
+1	1	6
+2	1	6
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# A RENAME also replaces the catalog entry without emitting a USE_TABLE, but it additionally invalidates the name that
+# the entry is resolved by. The rename cycle makes the logged USE_TABLE name t, while the backfill UPDATE of the
+# volatile default is logged in between the two renames, when the table is named tmp.
+statement ok
+BEGIN
+
+statement ok
+UPDATE t SET d = d + 1
+
+statement ok
+ALTER TABLE t RENAME TO tmp
+
+statement ok
+ALTER TABLE tmp ADD COLUMN e TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+statement ok
+ALTER TABLE tmp RENAME TO t
+
+statement ok
+COMMIT
+
+restart
+
+query III
+SELECT a, c, d FROM t ORDER BY a
+----
+1	1	7
+2	1	7
+
+query I
+SELECT COUNT(*) FROM t WHERE e IS NOT NULL
+----
+2

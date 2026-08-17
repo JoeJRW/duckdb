@@ -48,6 +48,9 @@ public:
 	ClientContext &context;
 	Catalog &catalog;
 	optional_ptr<TableCatalogEntry> current_table;
+	//! Name of current_table, tracked separately because current_table can refer to a superseded catalog entry
+	string current_table_schema;
+	string current_table_name;
 	MetaBlockPointer checkpoint_id;
 	idx_t wal_version = 1;
 	optional_idx current_position;
@@ -298,6 +301,7 @@ protected:
 
 private:
 	void ReplayIndexData(IndexStorageInfo &info);
+	void RefreshCurrentTable(const AlterInfo &alter_info);
 
 private:
 	ReplayState &state;
@@ -852,12 +856,35 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	});
 }
 
+//! WALs written before USE_TABLE was keyed on the catalog entry can contain an ALTER that is not followed by a new
+//! USE_TABLE, because the write side keyed it on the DataTableInfo, which an ALTER reuses. Re-resolve the current table
+//! so that subsequent INSERT/DELETE/UPDATE entries are applied to the post-ALTER entry instead of the superseded one.
+void WriteAheadLogDeserializer::RefreshCurrentTable(const AlterInfo &alter_info) {
+	if (!state.current_table) {
+		return;
+	}
+	if (alter_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
+		auto &table_info = alter_info.Cast<AlterTableInfo>();
+		if (table_info.alter_table_type == AlterTableType::RENAME_TABLE &&
+		    StringUtil::CIEquals(table_info.schema, state.current_table_schema) &&
+		    StringUtil::CIEquals(table_info.name, state.current_table_name)) {
+			state.current_table_name = table_info.Cast<RenameTableInfo>().new_table_name;
+		}
+	}
+	state.current_table = catalog.GetEntry<TableCatalogEntry>(context, state.current_table_schema,
+	                                                         state.current_table_name, OnEntryNotFound::RETURN_NULL);
+}
+
 void WriteAheadLogDeserializer::ReplayAlter() {
 	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "info");
 	auto &alter_info = info->Cast<AlterInfo>();
 	alter_info.bind_mode = AlterBindMode::SKIP_BINDING;
 	if (!alter_info.IsAddPrimaryKey()) {
-		return ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
+		ReplayWithoutIndex(context, catalog, alter_info, DeserializeOnly());
+		if (!DeserializeOnly()) {
+			RefreshCurrentTable(alter_info);
+		}
+		return;
 	}
 
 	auto index_storage_info = deserializer.ReadProperty<IndexStorageInfo>(102, "index_storage_info");
@@ -915,6 +942,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	                                      table_info.name);
 
 	catalog.Alter(context, alter_info);
+	RefreshCurrentTable(alter_info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1137,6 +1165,8 @@ void WriteAheadLogDeserializer::ReplayUseTable() {
 		return;
 	}
 	state.current_table = &catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+	state.current_table_schema = std::move(schema_name);
+	state.current_table_name = std::move(table_name);
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {
