@@ -265,7 +265,9 @@ public:
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
-	idx_t GetAllocationSize(idx_t cardinality) const;
+	//! Size of the vector's own buffers. When include_string_heap is true, also accounts for the actual
+	//! payload bytes held in the string heap (VARCHAR/BLOB) - used to size the streaming result buffer for backpressure.
+	idx_t GetAllocationSize(idx_t cardinality, bool include_string_heap = false) const;
 
 	// Getters
 	inline VectorType GetVectorType() const {

@@ -77,6 +77,11 @@ struct ClientConfig {
 	bool force_fetch_row = false;
 	//! Prefer High Precision Calculation
 	bool prefer_high_precision = false;
+	//! Target maximum size in bytes for each scan result chunk.
+	//! When set, the scan dynamically reduces the number of rows per chunk to stay under this limit.
+	//! 0 = disabled (scan full vectors).
+	idx_t scan_target_size_bytes = 0;
+
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;

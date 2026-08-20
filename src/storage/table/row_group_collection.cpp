@@ -4,6 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
@@ -1211,6 +1212,11 @@ public:
 		scan_state.Initialize(column_ids);
 		scan_state.table_state.Initialize(QueryContext(), types);
 		scan_state.table_state.max_row = idx_t(-1);
+		// Bound the merge-read peak memory via the byte budget (0 = whole vector), mirroring the checkpoint
+		// write side. Without this, scanning a row group with wide columns materializes a full vector at once
+		// and can OOM under a low memory_limit.
+		scan_state.options.scan_target_size_bytes =
+		    DBConfig::GetConfig(checkpoint_state.writer.GetDatabase()).options.scan_target_size_bytes;
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
 		optional_idx row_start;

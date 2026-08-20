@@ -34,9 +34,11 @@ class ColumnSegmentTree;
 class ValiditySegment;
 class TableFilterSet;
 class ColumnData;
+class BaseStatistics;
 class DuckTransaction;
 class RowGroupSegmentTree;
 class TableFilter;
+class ClientContext;
 struct AdaptiveFilterState;
 struct TableScanOptions;
 struct ScanSamplingInfo;
@@ -223,6 +225,154 @@ private:
 	idx_t always_true_filters = 0;
 };
 
+//! Adaptive batch size predictor for sub-vector scanning.
+//!
+//! Goal: given a byte budget (scan_target_size_bytes), predict how many rows to scan per batch.
+//!
+//! Two-phase approach:
+//!   1. Lazy cold start (on the first PredictBatchSize call) from row group column statistics
+//!      (TotalStringLength, min/max). Fixed-size columns contribute exact widths; variable-size columns
+//!      use stat-based estimates.
+//!   2. Update() — after each batch, refine the variable-size estimate via EMA (old-value weight=0.3,
+//!      new-data weight=0.7) using actual scanned bytes (head-block sampling of string_t::GetSize()).
+//!
+//! `initialized` is cleared at each row group boundary, so the next PredictBatchSize re-computes the
+//! cold-start estimate, since string length distributions can vary across row groups.
+struct ScanSizePredictor {
+	//! Default per-row estimate when column statistics are unavailable
+	static constexpr double DEFAULT_BYTES_PER_ROW = 256.0;
+
+	//! Sum of fixed-size column widths (INT, DOUBLE, etc.) — exact, no EMA needed
+	idx_t fixed_bytes_per_row = 0;
+	//! Aggregated per-row estimate for all variable-size columns. Only string-backed types
+	//! (PhysicalType::VARCHAR — VARCHAR, BLOB, BIT, ...) are genuinely measured (stat-based cold
+	//! start + EMA feedback); LIST/MAP/STRUCT/ARRAY contribute a constant DEFAULT_BYTES_PER_ROW
+	//! placeholder and are not tracked.
+	double dynamic_bytes_per_row = 0;
+	//! Worst-case per-row byte bound from row group statistics: fixed column widths + per-VARCHAR
+	//! (string_t slot + MaxStringLength). Every row's string is <= MaxStringLength by definition, so a
+	//! batch sized by target_bytes / worst_case_bytes_per_row can never exceed the budget — even if it
+	//! lands entirely on the largest blobs. Unlike dynamic_bytes_per_row (an average-tracking EMA) this
+	//! never decays. A reactive EMA cannot foresee a sparse->cluster transition and always overshoots the
+	//! first such batch; this hard cap is what actually bounds peak memory. Computed at cold start;
+	//! 0 = not computed (no cap applied).
+	double worst_case_bytes_per_row = 0;
+	bool initialized = false;
+
+	//! Accuracy counters — accumulated across batches within a scan, used for diagnostics
+	idx_t total_batches = 0;
+	idx_t total_predicted_bytes = 0;
+	idx_t total_actual_bytes = 0;
+	double max_overshoot_ratio = 0.0; //! worst-case actual/predicted ratio across all batches
+	double sum_overshoot_ratio = 0.0; //! sum of per-batch ratios (divide by total_batches for avg)
+	double first_batch_ratio = 0.0;   //! actual/predicted on the very first batch (measures cold-start accuracy)
+	//! Batches where the worst-case cap (worst_case_bytes_per_row) was the binding constraint rather than the
+	//! EMA/max_rows result — i.e. the hard OOM guard actively shrank the batch. Measures the pessimism cost.
+	idx_t total_safe_clamped_batches = 0;
+
+	//! Detail of the most recent PredictBatchSize call, for optional per-batch TRACE logging at the scan
+	//! call site. last_predicted_rows is the EMA-based batch size before the worst-case cap; last_safe_rows
+	//! is the worst-case cap (0 when no cap applied). The returned scan_count is min(these two).
+	idx_t last_predicted_rows = 0;
+	idx_t last_safe_rows = 0;
+
+	//! Invalidate the cold-start estimate so the next PredictBatchSize re-computes it (e.g. at a row group
+	//! boundary). Accuracy counters accumulate across the whole scan and are intentionally left untouched.
+	void Reset() {
+		initialized = false;
+	}
+
+	//! Predict batch size: target_bytes / bytes_per_row, clamped to [1, max_rows].
+	//! Lazily computes the per-row byte estimate from row group statistics on the first call.
+	idx_t PredictBatchSize(idx_t target_bytes, idx_t max_rows, const vector<StorageIndex> &column_ids,
+	                       RowGroup &row_group);
+	//! Refine dynamic_bytes_per_row via EMA from actual scan result
+	void Update(DataChunk &result);
+
+	//! Single-column variant for the checkpoint read path (one ColumnData, possibly nested, scanned into a
+	//! single Vector). Cold-starts from the column's own statistics using the FULL max string length
+	//! (more conservative than PredictBatchSize's 0.5x factor) so the first batch of uniformly large blobs
+	//! stays within budget; refined by UpdateSingle. Reuses the same fields/EMA as the multi-column path.
+	idx_t PredictBatchSizeSingle(idx_t target_bytes, idx_t max_rows, const LogicalType &type,
+	                             optional_ptr<BaseStatistics> stats);
+	//! Refine dynamic_bytes_per_row via EMA from the exact allocation size (incl. string heap) of one vector.
+	void UpdateSingle(Vector &vec, idx_t count);
+
+	//! Emit the accumulated accuracy counters as a single TRACE line at scan completion. No-op if no batch ran.
+	void LogStats(ClientContext &context) const;
+	//! Emit the detail of the most recent PredictBatchSize call (predicted vs worst-case cap vs final scan_count)
+	//! as a TRACE line. No-op when context is not a valid session (e.g. checkpoint / WAL paths).
+	void LogBatch(optional_ptr<ClientContext> context, idx_t target_bytes, idx_t max_rows, idx_t scan_count) const;
+};
+
+//! Tracks progress within a single vector during sub-batch scanning.
+//! A standard 2048-row vector is split into multiple smaller batches,
+//! each sized by ScanSizePredictor to stay within the byte budget.
+struct SubVectorScanState {
+public:
+	//! Surviving (non-deleted) rows in the current vector; equals vector_max_count when there are no deletes
+	idx_t ValidCount() const {
+		return valid_count;
+	}
+
+	//! Rows of the current vector not yet consumed by prior batches
+	idx_t RemainingRows() const {
+		return vector_max_count - offset;
+	}
+
+	void Reset() {
+		offset = 0;
+		vector_max_count = 0;
+		valid_count = 0;
+		valid_sel_cursor = 0;
+	}
+
+	//! Start scanning a fresh vector: record its total/surviving row count and rewind to the start
+	void BeginVector(idx_t max_count, idx_t valid_count_p) {
+		offset = 0;
+		vector_max_count = max_count;
+		valid_count = valid_count_p;
+		valid_sel_cursor = 0;
+	}
+
+	//! Advance past the batch just scanned; returns true once the whole vector has been consumed
+	bool Advance(idx_t scan_count) {
+		offset += scan_count;
+		return offset >= vector_max_count;
+	}
+
+	bool InProgress() const {
+		return offset > 0 && offset < vector_max_count;
+	}
+
+	//! Window a vector-wide valid selection to the current batch [offset, offset + scan_count) and rebase the
+	//! surviving absolute positions to [0, scan_count) so they index into the batch-sized result. Advances
+	//! valid_sel_cursor past the consumed entries and returns the number of survivors in this batch.
+	idx_t WindowValidSelection(const SelectionVector &valid_sel, idx_t scan_count, SelectionVector &batch_sel) {
+		idx_t batch_end = offset + scan_count;
+		idx_t survivors = 0;
+		while (valid_sel_cursor < valid_count && valid_sel.get_index(valid_sel_cursor) < batch_end) {
+			idx_t abs_pos = valid_sel.get_index(valid_sel_cursor++);
+			batch_sel.set_index(survivors++, abs_pos - offset);
+		}
+		return survivors;
+	}
+
+	static bool IsActive(idx_t scan_target_size_bytes) {
+		return scan_target_size_bytes > 0;
+	}
+
+private:
+	//! Current row offset within the vector (0..vector_max_count)
+	idx_t offset = 0;
+	//! Total scannable rows in the current vector (STANDARD_VECTOR_SIZE for a full vector, less for the tail)
+	idx_t vector_max_count = 0;
+	//! Surviving (non-deleted) rows in the current vector; equals vector_max_count when there are no deletes
+	idx_t valid_count = 0;
+	//! Entries of valid_sel already consumed by prior batches of the current vector (delete sub-batch cursor)
+	idx_t valid_sel_cursor = 0;
+};
+
 class CollectionScanState {
 public:
 	explicit CollectionScanState(TableScanState &parent_p);
@@ -248,6 +398,14 @@ public:
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+
+	//! Sub-vector scan state for controlling per-batch row count
+	SubVectorScanState sub_vector_state;
+	//! Predictor for adaptive sub-vector batch sizing
+	ScanSizePredictor size_predictor;
+	//! The query context of this scan, used as the logging source for per-batch predictor TRACE output.
+	//! Invalid on non-session paths (checkpoint / WAL), where per-batch logging is skipped.
+	QueryContext query_context;
 
 public:
 	void Initialize(const QueryContext &context, const vector<LogicalType> &types);
@@ -275,6 +433,8 @@ struct ScanSamplingInfo {
 struct TableScanOptions {
 	//! Fetch rows one-at-a-time instead of using the regular scans.
 	bool force_fetch_row = false;
+	//! Target maximum size in bytes for each scan result chunk. 0 = disabled.
+	idx_t scan_target_size_bytes = 0;
 };
 
 class CheckpointLock {

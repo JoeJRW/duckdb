@@ -1,0 +1,86 @@
+# name: test/sql/storage/checkpoint_blob_memory.test
+# description: CHECKPOINT of a large-blob table stays within a scan_target_size_bytes byte budget
+# group: [storage]
+
+# Large blobs make a single 2048-row checkpoint read vector ~512MB. Under a small memory_limit that
+# overflows and OOMs (invalidating the DB) unless scan_target_size_bytes splits the read into
+# byte-budgeted sub-batches. This test guards both: budget=0 keeps the old (failing) behavior, a
+# non-zero budget lets the checkpoint complete with correct data.
+#
+# Note: a plain blob scan (the verification queries) also materializes 2048-row / ~512MB vectors, so
+# memory_limit is raised for data setup + verification and only dropped around the CHECKPOINT calls.
+
+load __TEST_DIR__/checkpoint_blob_memory.db
+
+statement ok
+SET memory_limit='20GB';
+
+# keep the CTAS data in the WAL/in-memory until our explicit CHECKPOINT
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+SET threads=4;
+
+# 2500 rows x 250KB blob: the first 2048-row checkpoint scan vector alone is ~512MB
+statement ok
+CREATE TABLE t AS SELECT i AS id, repeat('x', 250000)::BLOB AS b FROM range(2500) tbl(i);
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2500	625000000
+
+# --- negative guard: no byte budget -> full 2048-row vector -> OOM under 300MB ---
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+SET memory_limit='300MB';
+
+statement error
+CHECKPOINT;
+----
+Out of Memory
+
+# the OOM invalidates the DB; restart replays the WAL to recover the (un-checkpointed) data
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2500	625000000
+
+# --- positive: 16MB budget -> sub-batches of ~67 rows -> peak well under 300MB -> success ---
+# The setting is UBIGINT (raw byte count); it does not parse human-readable strings like '16MB'.
+# Global scope so background/shutdown checkpoints are also covered.
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+CHECKPOINT;
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2500	625000000
+
+# data survives a clean restart from the checkpointed file
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2500	625000000

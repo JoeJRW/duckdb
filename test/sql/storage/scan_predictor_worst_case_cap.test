@@ -1,0 +1,143 @@
+# name: test/sql/storage/scan_predictor_worst_case_cap.test
+# description: Verify the worst_case_bytes_per_row cap bounds per-batch materialized memory on skewed
+#   (sparse->cluster) data, where the reactive EMA alone would overshoot. A/B is derived from the
+#   per-batch predictor TRACE log within a single run: the logged `predicted` is what the batch size
+#   would be WITHOUT the cap (EMA-only, pre-cap), the logged `scan_count` is WITH the cap. Peak
+#   materialized bytes for either is bounded by rows * worst_bpr.
+# group: [storage]
+
+require noforcestorage
+
+load {TEST_DIR}/scan_predictor_worst_case_cap.db
+
+statement ok
+PRAGMA threads=1
+
+# ============================================================
+# TC1: Skewed distribution (sparse -> cluster) within one row group.
+#   Vectors 0,1 = 4096 rows x 10-byte strings (sparse); vector 2 = 2048 rows x 100000-byte blobs
+#   (cluster). Target=2MB. worst_bpr = 16 (string_t slot) + 100000 (MaxStringLength) = 100016.
+#   safe_count = 2097152 / 100016 = 20.
+#
+#   Across the sparse vectors the EMA decays to bpr~10, so `predicted` ramps to the full 2048.
+#   The first cluster batch is still sized off that decayed EMA (predicted=2048) -- a reactive
+#   predictor cannot foresee the transition. WITHOUT the cap that batch materializes
+#   2048 * 100016 ~= 195MB (~97x the 2MB budget) => the OOM. WITH the cap it is clamped to 20 rows.
+# ============================================================
+
+statement ok
+CREATE TABLE t_skew(s VARCHAR)
+
+# Single ordered INSERT so all 6144 rows land in ONE row group (separate INSERTs get split into
+# distinct row groups, which would isolate the sparse/cluster stats and defeat the scenario). The
+# row-group-wide MaxStringLength=100000 then applies worst_bpr=100016 across every vector, and the
+# EMA decays over the sparse vectors before the cluster vector arrives.
+statement ok
+INSERT INTO t_skew SELECT CASE WHEN i < 4096 THEN repeat('s', 10) ELSE repeat('L', 100000) END FROM range(6144) tbl(i)
+
+statement ok
+SET scan_target_size_bytes=2097152
+
+statement ok
+CALL enable_logging(level='trace')
+
+# Force materialization of the VARCHAR column (count(*) would project it away).
+query I
+SELECT SUM(LENGTH(s)) FROM t_skew
+----
+204840960
+
+statement ok
+set enable_logging=false
+
+# The hard OOM guard actively shrank batches (worst-case cap was the binding constraint).
+query I
+SELECT CASE
+    WHEN message.split('safe_clamped_batches=')[2]::BIGINT > 0 THEN 'OK'
+    ELSE concat('FAIL: ', message)
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK
+
+# A (no cap): the largest EMA-only prediction, landing on cluster rows (worst_bpr each), would
+# materialize far more than the byte budget -- this is the batch the cap must prevent.
+query I
+SELECT CASE
+    WHEN MAX(message.split('predicted=')[2].split(' ')[1]::BIGINT
+             * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE) > 2097152 THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK
+
+# B (capped): every actually-scanned batch, bounded by worst_bpr, stays within the byte budget.
+query I
+SELECT CASE
+    WHEN MAX(message.split('scan_count=')[2]::BIGINT
+             * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE) <= 2097152 THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK
+
+# Effectiveness margin: the cap shrinks the largest batch by at least 10x (predicted 2048 -> scan 20).
+query I
+SELECT CASE
+    WHEN MAX(message.split('predicted=')[2].split(' ')[1]::BIGINT)
+         >= 10 * MAX(message.split('scan_count=')[2]::BIGINT) THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK
+
+# ============================================================
+# TC2: Uniform contrast. 2048 rows x 100000-byte blobs, same target/worst_bpr.
+#   Here every row is the worst case, so the EMA converges to the true width within a few batches
+#   and `predicted` settles at ~safe_count. The cap only binds during cold-start warmup, so it is
+#   NOT the binding constraint for most batches -- unlike the skewed case above.
+# ============================================================
+
+statement ok
+CREATE TABLE t_uniform(s VARCHAR)
+
+statement ok
+INSERT INTO t_uniform SELECT repeat('L', 100000) FROM range(2048)
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT SUM(LENGTH(s)) FROM t_uniform
+----
+204800000
+
+statement ok
+set enable_logging=false
+
+# Capped batches stay within budget here too.
+query I
+SELECT CASE
+    WHEN MAX(message.split('scan_count=')[2]::BIGINT
+             * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE) <= 2097152 THEN 'OK'
+    ELSE 'FAIL'
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor batch:')
+----
+OK
+
+# Contrast with TC1: on uniform data the cap binds only during the brief cold-start warmup
+# (a handful of batches), not pervasively.
+query I
+SELECT CASE
+    WHEN message.split('safe_clamped_batches=')[2]::BIGINT < 20 THEN 'OK'
+    ELSE concat('FAIL: ', message)
+END FROM duckdb_logs
+WHERE message.starts_with('ScanSizePredictor:')
+ORDER BY timestamp DESC LIMIT 1
+----
+OK

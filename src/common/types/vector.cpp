@@ -899,10 +899,15 @@ void Vector::Print(idx_t count) const {
 }
 
 // TODO: add the size of validity masks to this
-idx_t Vector::GetAllocationSize(idx_t cardinality) const {
+idx_t Vector::GetAllocationSize(idx_t cardinality, bool include_string_heap) const {
 	if (!type.IsNested()) {
 		auto physical_size = GetTypeIdSize(type.InternalType());
-		return cardinality * physical_size;
+		auto total_size = cardinality * physical_size;
+		if (include_string_heap && type.InternalType() == PhysicalType::VARCHAR && auxiliary &&
+		    auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER) {
+			total_size += auxiliary->Cast<VectorStringBuffer>().GetHeapSize();
+		}
+		return total_size;
 	}
 	auto internal_type = type.InternalType();
 	switch (internal_type) {
@@ -912,21 +917,21 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 
 		auto child_cardinality = ListVector::GetListCapacity(*this);
 		auto &child_entry = ListVector::GetEntry(*this);
-		total_size += (child_entry.GetAllocationSize(child_cardinality));
+		total_size += (child_entry.GetAllocationSize(child_cardinality, include_string_heap));
 		return total_size;
 	}
 	case PhysicalType::ARRAY: {
 		auto child_cardinality = ArrayVector::GetTotalSize(*this);
 
 		auto &child_entry = ArrayVector::GetEntry(*this);
-		auto total_size = (child_entry.GetAllocationSize(child_cardinality));
+		auto total_size = (child_entry.GetAllocationSize(child_cardinality, include_string_heap));
 		return total_size;
 	}
 	case PhysicalType::STRUCT: {
 		idx_t total_size = 0;
 		auto &children = StructVector::GetEntries(*this);
 		for (auto &child : children) {
-			total_size += child->GetAllocationSize(cardinality);
+			total_size += child->GetAllocationSize(cardinality, include_string_heap);
 		}
 		return total_size;
 	}

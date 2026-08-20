@@ -22,6 +22,7 @@ set(TEST_API_OBJECTS
     test_prepared_api.cpp
     test_table_info.cpp
     test_appender_api.cpp
+    test_delta_appender_oom.cpp
     test_lifecycle_hooks.cpp
     test_like_matcher.cpp
     test_pending_query.cpp
@@ -38,7 +39,9 @@ set(TEST_API_OBJECTS
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
     test_object_cache.cpp
-    test_buffer_pool_eviction.cpp)
+    test_buffer_pool_eviction.cpp
+    test_streaming_backpressure.cpp
+    test_concurrent_checkpoint_drop.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

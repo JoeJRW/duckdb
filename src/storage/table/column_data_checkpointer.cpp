@@ -8,6 +8,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -84,6 +85,15 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
 
+	// When a byte budget is set (from the client's scan_target_size_bytes), split each STANDARD_VECTOR_SIZE
+	// window into smaller sub-batches so large blobs are not materialized a full 2048-row vector at a time.
+	// Budget 0 (default) keeps the original fixed 2048-row stepping bit-for-bit.
+	idx_t target_bytes = DBConfig::GetConfig(storage_manager.GetDatabase()).options.scan_target_size_bytes;
+	bool sub_batch = target_bytes > 0;
+	ScanSizePredictor predictor;
+	// Use the column's own statistics (correct for nested sub-columns too, unlike a top-level index).
+	unique_ptr<BaseStatistics> stats = sub_batch ? col_data.GetStatistics() : nullptr;
+
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
 	for (auto &segment_node : col_data.data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
@@ -91,14 +101,23 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
 
-		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
-			scan_vector.Reference(intermediate);
+		idx_t base_row_index = 0;
+		while (base_row_index < segment.count) {
+			idx_t max_count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
+			idx_t count = sub_batch ? predictor.PredictBatchSizeSingle(target_bytes, max_count,
+			                                                           intermediate.GetType(), stats.get())
+			                        : max_count;
 
-			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
+			scan_vector.Reference(intermediate);
 			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			callback(scan_vector, count);
+
+			if (sub_batch) {
+				predictor.UpdateSingle(scan_vector, count);
+			}
+			base_row_index += count;
 		}
 	}
 }

@@ -76,7 +76,9 @@ public:
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
 
-	idx_t GetAllocationSize() const;
+	//! Size of the chunk's own buffers. When include_string_heap is true, also accounts for the actual
+	//! payload bytes held in the string heap - used to size the streaming result buffer for backpressure.
+	idx_t GetAllocationSize(bool include_string_heap = false) const;
 
 	//! Returns true if all vectors in the DataChunk are constant
 	DUCKDB_API bool AllConstant() const;

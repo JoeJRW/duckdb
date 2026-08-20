@@ -206,6 +206,10 @@ public:
 	ArenaAllocator &GetStringAllocator() {
 		return heap.GetAllocator();
 	}
+	//! Actual number of bytes held by the string heap (payload of the strings owned by this buffer)
+	idx_t GetHeapSize() const {
+		return heap.SizeInBytes();
+	}
 	//! Allocate a buffer to store up to "len" bytes for a string
 	//! This can be turned into a proper string by using FinalizeBuffer afterwards
 	//! Note that alloc_len only has to be an upper bound, the final string may be smaller
