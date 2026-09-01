@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/stack_checker.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -26,6 +27,13 @@ JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
                                                          optional_ptr<RelationStats> stats) {
+	// Correlated subqueries are represented as delim joins and can cause the
+	// join-order optimizer to recurse deeply. Check the native stack before
+	// touching the plan or reading optimizer settings.
+	if (NativeStackChecker::IsStackNearLimit()) {
+		throw InvalidInputException("Insufficient stack space to process the query");
+	}
+
 	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(query_graph_manager.context);
 	if (depth > max_expression_depth) {
 		// Very deep plans will eventually consume quite some stack space
