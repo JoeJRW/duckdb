@@ -209,7 +209,16 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 			return false;
 		}
 	}
-	while (pidx < plen && pdata[pidx] == PERCENTAGE) {
+	// Only unescaped trailing '%' wildcards can match an empty suffix. When escape is '%', a '%' starts an escape
+	// sequence instead.
+	while (pidx < plen) {
+		if (HAS_ESCAPE && pdata[pidx] == escape) {
+			// an escape sequence still needs a character to match against, and there is none left
+			break;
+		}
+		if (pdata[pidx] != PERCENTAGE) {
+			break;
+		}
 		pidx++;
 	}
 	return pidx == plen && sidx == slen;
@@ -223,9 +232,11 @@ struct LikeSegment {
 };
 
 struct LikeMatcher : public FunctionData {
-	LikeMatcher(string like_pattern_p, vector<LikeSegment> segments, bool has_start_percentage, bool has_end_percentage)
+	LikeMatcher(string like_pattern_p, vector<LikeSegment> segments, bool has_start_percentage, bool has_end_percentage,
+	            bool has_escape = false, char escape = '\0')
 	    : like_pattern(std::move(like_pattern_p)), segments(std::move(segments)),
-	      has_start_percentage(has_start_percentage), has_end_percentage(has_end_percentage) {
+	      has_start_percentage(has_start_percentage), has_end_percentage(has_end_percentage), has_escape(has_escape),
+	      escape(escape) {
 	}
 
 	bool Match(string_t &str) {
@@ -287,58 +298,83 @@ struct LikeMatcher : public FunctionData {
 		}
 	}
 
-	static unique_ptr<LikeMatcher> CreateLikeMatcher(string like_pattern, char escape = '\0') {
+	// Build a matcher for LIKE without ESCAPE semantics.
+	static unique_ptr<LikeMatcher> CreateLikeMatcher(string like_pattern) {
+		return CreateLikeMatcherInternal(std::move(like_pattern), false, '\0');
+	}
+
+	// Build an escape-aware matcher using the byte returned by GetEscapeChar(). The overload distinguishes this from
+	// LIKE without ESCAPE semantics.
+	static unique_ptr<LikeMatcher> CreateLikeMatcher(string like_pattern, char escape) {
+		return CreateLikeMatcherInternal(std::move(like_pattern), true, escape);
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage, has_escape,
+		                              escape);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<LikeMatcher>();
+		// The same pattern can produce different segments with different escape characters.
+		return like_pattern == other.like_pattern && has_escape == other.has_escape &&
+		       (!has_escape || escape == other.escape);
+	}
+
+private:
+	// Split the pattern into constant segments separated by unescaped '%' wildcards. Return nullptr when the segment
+	// model cannot express the pattern.
+	static unique_ptr<LikeMatcher> CreateLikeMatcherInternal(string like_pattern, bool has_escape, char escape) {
 		vector<LikeSegment> segments;
-		idx_t last_non_pattern = 0;
+		string segment;
 		bool has_start_percentage = false;
 		bool has_end_percentage = false;
 		for (idx_t i = 0; i < like_pattern.size(); i++) {
 			auto ch = like_pattern[i];
-			if (ch == escape || ch == '%' || ch == '_') {
-				// special character, push a constant pattern
-				if (i > last_non_pattern) {
-					segments.emplace_back(like_pattern.substr(last_non_pattern, i - last_non_pattern));
-				}
-				last_non_pattern = i + 1;
-				if (ch == escape || ch == '_') {
-					// escape or underscore: could not create efficient like matcher
-					// FIXME: we could handle escaped percentages here
+			if (has_escape && ch == escape) {
+				if (i + 1 == like_pattern.size()) {
+					// Preserve the generic matcher's existing runtime handling of dangling escapes.
 					return nullptr;
-				} else {
-					// sample_size
-					if (i == 0) {
-						has_start_percentage = true;
-					}
-					if (i + 1 == like_pattern.size()) {
-						has_end_percentage = true;
-					}
 				}
+				// escaped character: it is matched literally, so it just extends the current segment
+				segment += like_pattern[++i];
+				continue;
+			}
+			if (ch == '_') {
+				// The segment model represents variable-length '%' gaps, not the one-character gap introduced by '_'.
+				return nullptr;
+			}
+			if (ch != '%') {
+				segment += ch;
+				continue;
+			}
+			// wildcard: finish off the segment we were building
+			if (!segment.empty()) {
+				segments.emplace_back(std::move(segment));
+				segment.clear();
+			} else if (i == 0) {
+				has_start_percentage = true;
+			}
+			if (i + 1 == like_pattern.size()) {
+				has_end_percentage = true;
 			}
 		}
-		if (last_non_pattern < like_pattern.size()) {
-			segments.emplace_back(like_pattern.substr(last_non_pattern, like_pattern.size() - last_non_pattern));
+		if (!segment.empty()) {
+			segments.emplace_back(std::move(segment));
 		}
 		if (segments.empty()) {
 			return nullptr;
 		}
 		return make_uniq<LikeMatcher>(std::move(like_pattern), std::move(segments), has_start_percentage,
-		                              has_end_percentage);
+		                              has_end_percentage, has_escape, escape);
 	}
 
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<LikeMatcher>();
-		return like_pattern == other.like_pattern;
-	}
-
-private:
 	string like_pattern;
 	vector<LikeSegment> segments;
 	bool has_start_percentage;
 	bool has_end_percentage;
+	bool has_escape;
+	char escape;
 };
 
 unique_ptr<FunctionData> LikeBindFunction(ClientContext &context, ScalarFunction &bound_function,
@@ -373,10 +409,18 @@ static unique_ptr<FunctionData> LikeEscapeBindFunction(ClientContext &context, S
 	if (arguments[1]->IsFoldable() && arguments[2]->IsFoldable()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		Value escape_str = ExpressionExecutor::EvaluateScalar(context, *arguments[2]);
-		if (pattern_str.ToString().find(escape_str.ToString()) != std::string::npos) {
+		if (pattern_str.IsNull() || escape_str.IsNull()) {
 			return nullptr;
 		}
-		return LikeMatcher::CreateLikeMatcher(pattern_str.ToString());
+		auto escape_string = escape_str.ToString();
+		if (escape_string.size() > 1) {
+			// invalid escape string - leave the error reporting to GetEscapeChar() in the generic matcher
+			return nullptr;
+		}
+		// the matcher resolves the escape sequences itself, so patterns that contain the escape character can use
+		// the fast path as well - e.g. 'a\_b' with ESCAPE '\' is the constant string "a_b"
+		return LikeMatcher::CreateLikeMatcher(pattern_str.ToString(),
+		                                      escape_string.empty() ? '\0' : escape_string[0]);
 	}
 	return nullptr;
 }
