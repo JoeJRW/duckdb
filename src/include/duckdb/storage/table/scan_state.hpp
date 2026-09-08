@@ -358,10 +358,6 @@ public:
 		return survivors;
 	}
 
-	static bool IsActive(idx_t scan_target_size_bytes) {
-		return scan_target_size_bytes > 0;
-	}
-
 private:
 	//! Current row offset within the vector (0..vector_max_count)
 	idx_t offset = 0;

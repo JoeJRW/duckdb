@@ -703,7 +703,7 @@ ColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &checkpoi
 	}
 
 	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
-	ColumnDataCheckpointer checkpointer(states, GetStorageManager(), row_group, checkpoint_info);
+	ColumnDataCheckpointer checkpointer(states, GetStorageManager(), row_group, checkpoint_info, stats);
 	checkpointer.Checkpoint();
 	checkpointer.FinalizeCheckpoint();
 	return checkpoint_state;

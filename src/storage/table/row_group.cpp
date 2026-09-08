@@ -616,7 +616,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 	auto &transaction = options.transaction;
 	auto &svs = state.sub_vector_state;
 	auto target_bytes = state.GetOptions().scan_target_size_bytes;
-	bool sub_batch_enabled = SubVectorScanState::IsActive(target_bytes);
+	bool sub_batch_enabled = target_bytes > 0;
 
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {

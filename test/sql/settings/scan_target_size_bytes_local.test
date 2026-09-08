@@ -1,0 +1,107 @@
+# name: test/sql/settings/scan_target_size_bytes_local.test
+# description: Explicit local zero disables sub-batching independently of the global budget
+# group: [settings]
+
+require noforcestorage
+
+statement ok
+SET threads=1
+
+statement ok
+CREATE TABLE scan_budget AS SELECT i FROM range(4096) tbl(i)
+
+statement ok
+SET GLOBAL scan_target_size_bytes=1024
+
+query I
+SELECT current_setting('scan_target_size_bytes')
+----
+1024
+
+statement ok
+SET SESSION scan_target_size_bytes=0
+
+query I
+SELECT current_setting('scan_target_size_bytes')
+----
+0
+
+query I other
+SELECT current_setting('scan_target_size_bytes')
+----
+1024
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT sum(i) FROM scan_budget
+----
+8386560
+
+statement ok
+SET enable_logging=false
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:')
+----
+0
+
+statement ok
+SET GLOBAL scan_target_size_bytes=2048
+
+query I
+SELECT current_setting('scan_target_size_bytes')
+----
+0
+
+statement ok
+RESET SESSION scan_target_size_bytes
+
+query I
+SELECT current_setting('scan_target_size_bytes')
+----
+2048
+
+statement ok
+SET SESSION scan_target_size_bytes=512
+
+query I
+SELECT current_setting('scan_target_size_bytes')
+----
+512
+
+statement ok
+RESET SESSION scan_target_size_bytes
+
+query I
+SELECT current_setting('scan_target_size_bytes')
+----
+2048
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I
+SELECT sum(i) FROM scan_budget
+----
+8386560
+
+statement ok
+SET enable_logging=false
+
+query I
+SELECT count(*) > 0 FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:')
+----
+true
+
+statement ok
+RESET GLOBAL scan_target_size_bytes
+
+query I
+SELECT current_setting('scan_target_size_bytes')
+----
+0

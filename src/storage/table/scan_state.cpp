@@ -208,7 +208,8 @@ static double WorstCaseBytesPerRow(PhysicalType physical_type, optional_ptr<Base
 	if (TypeIsConstantSize(physical_type)) {
 		return static_cast<double>(GetTypeIdSize(physical_type));
 	}
-	if (stats && physical_type == PhysicalType::VARCHAR && StringStats::HasMaxStringLength(*stats)) {
+	if (stats && physical_type == PhysicalType::VARCHAR && stats->GetStatsType() == StatisticsType::STRING_STATS &&
+	    StringStats::HasMaxStringLength(*stats)) {
 		return static_cast<double>(GetTypeIdSize(PhysicalType::VARCHAR)) +
 		       static_cast<double>(StringStats::MaxStringLength(*stats));
 	}
@@ -238,6 +239,7 @@ idx_t ScanSizePredictor::PredictBatchSize(idx_t target_bytes, idx_t max_rows, co
 			} else {
 				double estimate = DEFAULT_BYTES_PER_ROW;
 				if (row_count > 0 && physical_type == PhysicalType::VARCHAR &&
+				    stats->GetStatsType() == StatisticsType::STRING_STATS &&
 				    StringStats::HasMaxStringLength(*stats)) {
 					// This branch's string statistics only expose the maximum length, so use half of it
 					// as the cold-start estimate. The EMA feedback loop in Update() corrects this within
@@ -354,7 +356,8 @@ idx_t ScanSizePredictor::PredictBatchSizeSingle(idx_t target_bytes, idx_t max_ro
 			fixed_bytes_per_row = GetTypeIdSize(physical_type);
 		} else {
 			double estimate = DEFAULT_BYTES_PER_ROW;
-			if (stats && physical_type == PhysicalType::VARCHAR && StringStats::HasMaxStringLength(*stats)) {
+			if (stats && physical_type == PhysicalType::VARCHAR &&
+			    stats->GetStatsType() == StatisticsType::STRING_STATS && StringStats::HasMaxStringLength(*stats)) {
 				// Full max length + fixed per-row string_t overhead. Conservative on purpose: the first
 				// checkpoint batch of uniformly large blobs must not overshoot the memory budget, which is
 				// the OOM we are preventing. EMA corrects skewed distributions within a few batches.

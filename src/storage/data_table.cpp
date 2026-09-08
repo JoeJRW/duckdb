@@ -11,7 +11,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -1242,7 +1242,7 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
 	// This path (commit WAL write / rollback RevertAppend) runs without a ClientContext, so it reads the
 	// global scan_target_size_bytes to sub-batch large-column reads and bound peak memory (0 = whole vector).
-	state.options.scan_target_size_bytes = DBConfig::GetConfig(db.GetDatabase()).options.scan_target_size_bytes;
+	state.options.scan_target_size_bytes = Settings::Get<ScanTargetSizeBytesSetting>(db.GetDatabase());
 	auto row_start_aligned =
 	    state.table_state.row_group->GetRowStart() + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 

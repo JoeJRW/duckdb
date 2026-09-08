@@ -1,0 +1,44 @@
+# name: test/sql/storage/checkpoint_nested_input_statistics.test
+# description: Byte-budgeted checkpoint uses the input statistics of nested columns
+# group: [storage]
+
+require noforcestorage
+
+load __TEST_DIR__/checkpoint_nested_input_statistics.db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+CREATE TABLE nested_values AS
+SELECT i,
+       [repeat('a', 1000), repeat('b', 2000)] AS strings,
+       {'value': repeat('c', 1500)} AS record,
+       [repeat('d', 1200), repeat('e', 1800)]::VARCHAR[2] AS fixed_strings
+FROM range(256) tbl(i)
+
+statement ok
+SET GLOBAL scan_target_size_bytes=4096
+
+statement ok
+CHECKPOINT
+
+query IIII
+SELECT count(*),
+       sum(length(strings[1]) + length(strings[2])),
+       sum(length(record.value)),
+       sum(length(fixed_strings[1]) + length(fixed_strings[2]))
+FROM nested_values
+----
+256	768000	384000	768000
+
+restart
+
+query IIII
+SELECT count(*),
+       sum(length(strings[1]) + length(strings[2])),
+       sum(length(record.value)),
+       sum(length(fixed_strings[1]) + length(fixed_strings[2]))
+FROM nested_values
+----
+256	768000	384000	768000

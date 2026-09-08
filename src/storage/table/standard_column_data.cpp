@@ -286,7 +286,7 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup 
 	checkpoint_states.emplace_back(checkpoint_state);
 	checkpoint_states.emplace_back(validity_state);
 
-	ColumnDataCheckpointer checkpointer(checkpoint_states, GetStorageManager(), row_group, checkpoint_info);
+	ColumnDataCheckpointer checkpointer(checkpoint_states, GetStorageManager(), row_group, checkpoint_info, stats);
 	checkpointer.Checkpoint();
 	checkpointer.FinalizeCheckpoint();
 

@@ -64,9 +64,10 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &checkpoint_states,
                                                StorageManager &storage_manager, const RowGroup &row_group,
-                                               ColumnCheckpointInfo &checkpoint_info)
+                                               ColumnCheckpointInfo &checkpoint_info, const BaseStatistics &input_stats)
     : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
-      intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {
+      intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info),
+      input_stats(input_stats) {
 	auto &db = storage_manager.GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 	compression_functions.resize(checkpoint_states.size());
@@ -88,11 +89,10 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	// When a byte budget is set (from the client's scan_target_size_bytes), split each STANDARD_VECTOR_SIZE
 	// window into smaller sub-batches so large blobs are not materialized a full 2048-row vector at a time.
 	// Budget 0 (default) keeps the original fixed 2048-row stepping bit-for-bit.
-	idx_t target_bytes = DBConfig::GetConfig(storage_manager.GetDatabase()).options.scan_target_size_bytes;
+	idx_t target_bytes = Settings::Get<ScanTargetSizeBytesSetting>(storage_manager.GetDatabase());
 	bool sub_batch = target_bytes > 0;
 	ScanSizePredictor predictor;
-	// Use the column's own statistics (correct for nested sub-columns too, unlike a top-level index).
-	unique_ptr<BaseStatistics> stats = sub_batch ? col_data.GetStatistics() : nullptr;
+	unique_ptr<BaseStatistics> stats = sub_batch ? input_stats.ToUnique() : nullptr;
 
 	// TODO: scan all the nodes from all segments, no need for CheckpointScan to virtualize this I think..
 	for (auto &segment_node : col_data.data.SegmentNodes()) {

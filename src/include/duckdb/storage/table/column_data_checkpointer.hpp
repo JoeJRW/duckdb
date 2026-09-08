@@ -61,7 +61,8 @@ public:
 class ColumnDataCheckpointer {
 public:
 	ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &states, StorageManager &storage_manager,
-	                       const RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info);
+	                       const RowGroup &row_group, ColumnCheckpointInfo &checkpoint_info,
+	                       const BaseStatistics &input_stats);
 
 public:
 	void Checkpoint();
@@ -83,6 +84,7 @@ private:
 	const RowGroup &row_group;
 	Vector intermediate;
 	ColumnCheckpointInfo &checkpoint_info;
+	const BaseStatistics &input_stats;
 
 	bool has_changes = false;
 	//! For every column data that is being checkpointed, the applicable functions

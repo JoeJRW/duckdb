@@ -13,7 +13,6 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_config.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -34,16 +33,6 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
-
-//! Effective scan_target_size_bytes for a query scan: the session-local override if set (non-zero),
-//! otherwise the global default (which also covers checkpoint/commit/rollback reads).
-static idx_t GetScanTargetSizeBytes(ClientContext &context) {
-	auto local = ClientConfig::GetConfig(context).scan_target_size_bytes;
-	if (local != 0) {
-		return local;
-	}
-	return DBConfig::GetConfig(context).options.scan_target_size_bytes;
-}
 
 struct TableScanLocalState : public LocalTableFunctionState {
 	//! The current position in the scan.
@@ -308,14 +297,14 @@ public:
 		}
 
 		l_state->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
-		l_state->scan_state.options.scan_target_size_bytes = GetScanTargetSizeBytes(context.client);
+		l_state->scan_state.options.scan_target_size_bytes = Settings::Get<ScanTargetSizeBytesSetting>(context.client);
 		return std::move(l_state);
 	}
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
-		l_state.scan_state.options.scan_target_size_bytes = GetScanTargetSizeBytes(context);
+		l_state.scan_state.options.scan_target_size_bytes = Settings::Get<ScanTargetSizeBytesSetting>(context);
 
 		do {
 			if (bind_data.is_create_index) {
