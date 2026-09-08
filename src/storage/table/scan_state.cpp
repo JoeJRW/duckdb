@@ -11,6 +11,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -20,10 +21,11 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 TableScanState::~TableScanState() {
 }
 
-void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<ClientContext> context,
-                                optional_ptr<TableFilterSet> table_filters,
+void TableScanState::Initialize(DatabaseInstance &db, vector<StorageIndex> column_ids_p,
+                                optional_ptr<ClientContext> context, optional_ptr<TableFilterSet> table_filters,
                                 optional_ptr<SampleOptions> table_sampling) {
 	this->column_ids = std::move(column_ids_p);
+	options.scan_target_size_bytes = Settings::Get<ScanTargetSizeBytesSetting>(db);
 	if (table_filters) {
 		filters.Initialize(*context, *table_filters, column_ids);
 	}
@@ -217,207 +219,53 @@ static double WorstCaseBytesPerRow(PhysicalType physical_type, optional_ptr<Base
 	return ScanSizePredictor::DEFAULT_BYTES_PER_ROW;
 }
 
+idx_t ScanSizePredictor::ApplyBudget(idx_t target_bytes, idx_t max_rows) {
+	total_batches++;
+	if (worst_case_bytes_per_row <= 0) {
+		last_safe_rows = 0;
+		return max_rows;
+	}
+	auto safe_count = static_cast<idx_t>(static_cast<double>(target_bytes) / worst_case_bytes_per_row);
+	last_safe_rows = safe_count;
+	if (safe_count < max_rows) {
+		total_safe_clamped_batches++;
+	}
+	return MaxValue<idx_t>(1, MinValue<idx_t>(max_rows, safe_count));
+}
+
 idx_t ScanSizePredictor::PredictBatchSize(idx_t target_bytes, idx_t max_rows, const vector<StorageIndex> &column_ids,
                                           RowGroup &row_group) {
 	if (!initialized) {
-		// Cold start: compute per-row byte estimates from this row group's column statistics.
-		fixed_bytes_per_row = 0;
-		dynamic_bytes_per_row = 0;
+		// Cold start: sum the worst-case per-row width over the scanned columns.
 		worst_case_bytes_per_row = 0;
-		auto row_count = row_group.count.load();
-
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto stats = row_group.GetStatistics(column_ids[i]);
 			if (!stats) {
-				dynamic_bytes_per_row += DEFAULT_BYTES_PER_ROW;
 				worst_case_bytes_per_row += DEFAULT_BYTES_PER_ROW;
 				continue;
 			}
-			auto physical_type = stats->GetType().InternalType();
-
-			if (TypeIsConstantSize(physical_type)) {
-				fixed_bytes_per_row += GetTypeIdSize(physical_type);
-			} else {
-				// Whole nested values use this placeholder without inspecting child statistics.
-				double estimate = DEFAULT_BYTES_PER_ROW;
-				if (row_count > 0 && physical_type == PhysicalType::VARCHAR &&
-				    stats->GetStatsType() == StatisticsType::STRING_STATS &&
-				    StringStats::HasMaxStringLength(*stats)) {
-					// This branch's string statistics only expose the maximum length, so use half of it
-					// as the cold-start estimate. The EMA feedback loop in Update() corrects this within
-					// a few batches.
-					estimate = static_cast<double>(StringStats::MaxStringLength(*stats)) * 0.5;
-				}
-				dynamic_bytes_per_row += estimate;
-			}
-			worst_case_bytes_per_row += WorstCaseBytesPerRow(physical_type, stats.get());
+			worst_case_bytes_per_row += WorstCaseBytesPerRow(stats->GetType().InternalType(), stats.get());
 		}
 		initialized = true;
 	}
-
-	double total_bpr = static_cast<double>(fixed_bytes_per_row) + dynamic_bytes_per_row;
-	if (total_bpr <= 0) {
-		return max_rows;
-	}
-	auto predicted = static_cast<idx_t>(static_cast<double>(target_bytes) / total_bpr);
-	auto result = MaxValue<idx_t>(1, MinValue<idx_t>(predicted, max_rows));
-	last_predicted_rows = result;
-	last_safe_rows = 0;
-
-	// Cap by the largest row width for fixed-size columns and VARCHAR with maximum-length statistics,
-	// rather than relying on the EMA to foresee a sparse->cluster transition. Fallback estimates for
-	// nested types or missing statistics are not bounds. At least one row is scanned even if it exceeds
-	// target_bytes, and this cap does not account for all query memory allocations.
-	if (worst_case_bytes_per_row > 0) {
-		auto safe_count = static_cast<idx_t>(static_cast<double>(target_bytes) / worst_case_bytes_per_row);
-		last_safe_rows = safe_count;
-		if (safe_count < result) {
-			// worst-case cap is tighter than the EMA/max_rows result: it is the binding constraint here
-			total_safe_clamped_batches++;
-		}
-		result = MaxValue<idx_t>(1, MinValue<idx_t>(result, safe_count));
-	}
-	return result;
-}
-
-//! Sample the first N rows of each VARCHAR column to estimate total bytes.
-//! Contiguous head sampling preserves sequential access for cache friendliness,
-//! while avoiding full iteration when batch size exceeds the sample window.
-static constexpr idx_t SAMPLE_BLOCK_SIZE = 64;
-
-static idx_t ComputeActualChunkBytes(DataChunk &result) {
-	idx_t total = 0;
-	auto count = result.size();
-	for (idx_t col_idx = 0; col_idx < result.ColumnCount(); col_idx++) {
-		auto &vec = result.data[col_idx];
-		auto physical_type = vec.GetType().InternalType();
-		if (TypeIsConstantSize(physical_type)) {
-			total += GetTypeIdSize(physical_type) * count;
-		} else if (physical_type == PhysicalType::VARCHAR) {
-			UnifiedVectorFormat unified;
-			vec.ToUnifiedFormat(count, unified);
-			auto data = UnifiedVectorFormat::GetData<string_t>(unified);
-			idx_t sample_count = MinValue<idx_t>(count, SAMPLE_BLOCK_SIZE);
-			idx_t sampled_bytes = 0;
-			for (idx_t i = 0; i < sample_count; i++) {
-				auto idx = unified.sel->get_index(i);
-				if (unified.validity.RowIsValid(idx)) {
-					sampled_bytes += data[idx].GetSize();
-				}
-			}
-			total += sampled_bytes * count / sample_count;
-		} else {
-			// Known limitation: STRUCT/LIST/MAP/ARRAY child vectors are not recursively measured.
-			// This placeholder also feeds the EMA and byte diagnostics, so neither reflects large nested
-			// payloads. Fixing feedback alone cannot prevent an oversized first batch; cold-start sizing
-			// and the cap also need child sizes and, for LIST/MAP, per-row element counts.
-			total += static_cast<idx_t>(ScanSizePredictor::DEFAULT_BYTES_PER_ROW) * count;
-		}
-	}
-	return total;
-}
-
-void ScanSizePredictor::Update(DataChunk &result) {
-	if (result.size() == 0) {
-		return;
-	}
-	auto actual_bytes = ComputeActualChunkBytes(result);
-	double actual_bpr = static_cast<double>(actual_bytes) / static_cast<double>(result.size());
-
-	// Accumulate accuracy counters
-	double total_bpr = static_cast<double>(fixed_bytes_per_row) + dynamic_bytes_per_row;
-	idx_t predicted_bytes = static_cast<idx_t>(total_bpr * static_cast<double>(result.size()));
-	total_batches++;
-	total_predicted_bytes += predicted_bytes;
-	total_actual_bytes += actual_bytes;
-	double ratio =
-	    (predicted_bytes > 0) ? static_cast<double>(actual_bytes) / static_cast<double>(predicted_bytes) : 1.0;
-	if (total_batches == 1) {
-		first_batch_ratio = ratio;
-	}
-	if (ratio > max_overshoot_ratio) {
-		max_overshoot_ratio = ratio;
-	}
-	sum_overshoot_ratio += ratio;
-
-	// EMA update: isolate the dynamic (variable-size) component and smooth it.
-	// Old-value weight=0.3 means new data weight=0.7, giving fast convergence (~99.9% in 6 batches).
-	double alpha = 0.3;
-	double dynamic_actual = actual_bpr - static_cast<double>(fixed_bytes_per_row);
-	if (dynamic_actual < 0) {
-		dynamic_actual = 0;
-	}
-	dynamic_bytes_per_row = alpha * dynamic_bytes_per_row + (1.0 - alpha) * dynamic_actual;
+	return ApplyBudget(target_bytes, max_rows);
 }
 
 idx_t ScanSizePredictor::PredictBatchSizeSingle(idx_t target_bytes, idx_t max_rows, const LogicalType &type,
                                                 optional_ptr<BaseStatistics> stats) {
 	if (!initialized) {
-		// Cold start from the single column's own statistics.
-		fixed_bytes_per_row = 0;
-		dynamic_bytes_per_row = 0;
-		auto physical_type = type.InternalType();
-		if (TypeIsConstantSize(physical_type)) {
-			fixed_bytes_per_row = GetTypeIdSize(physical_type);
-		} else {
-			double estimate = DEFAULT_BYTES_PER_ROW;
-			if (stats && physical_type == PhysicalType::VARCHAR &&
-			    stats->GetStatsType() == StatisticsType::STRING_STATS && StringStats::HasMaxStringLength(*stats)) {
-				// Full max length + fixed per-row string_t overhead. Conservative on purpose: the first
-				// checkpoint batch of uniformly large blobs must not overshoot the memory budget, which is
-				// the OOM we are preventing. EMA corrects skewed distributions within a few batches.
-				estimate = static_cast<double>(GetTypeIdSize(PhysicalType::VARCHAR)) +
-				           static_cast<double>(StringStats::MaxStringLength(*stats));
-			}
-			dynamic_bytes_per_row = estimate;
-		}
-		worst_case_bytes_per_row = WorstCaseBytesPerRow(physical_type, stats);
+		worst_case_bytes_per_row = WorstCaseBytesPerRow(type.InternalType(), stats);
 		initialized = true;
 	}
-
-	double total_bpr = static_cast<double>(fixed_bytes_per_row) + dynamic_bytes_per_row;
-	if (total_bpr <= 0) {
-		return max_rows;
-	}
-	auto predicted = static_cast<idx_t>(static_cast<double>(target_bytes) / total_bpr);
-	auto result = MaxValue<idx_t>(1, MinValue<idx_t>(predicted, max_rows));
-	// Same hard worst-case cap as the multi-column path: after UpdateSingle decays the EMA in a sparse
-	// region, a later batch landing on large blobs would otherwise overshoot the budget.
-	if (worst_case_bytes_per_row > 0) {
-		auto safe_count = static_cast<idx_t>(static_cast<double>(target_bytes) / worst_case_bytes_per_row);
-		result = MaxValue<idx_t>(1, MinValue<idx_t>(result, safe_count));
-	}
-	return result;
-}
-
-void ScanSizePredictor::UpdateSingle(Vector &vec, idx_t count) {
-	if (count == 0) {
-		return;
-	}
-	// Exact materialized bytes (including the string heap) — not the sampled estimate the DataChunk path
-	// uses — because the checkpoint budget is a hard memory ceiling, not a soft throughput target.
-	idx_t actual_bytes = vec.GetAllocationSize(count, /*include_string_heap=*/true);
-	double actual_bpr = static_cast<double>(actual_bytes) / static_cast<double>(count);
-
-	double alpha = 0.3;
-	double dynamic_actual = actual_bpr - static_cast<double>(fixed_bytes_per_row);
-	if (dynamic_actual < 0) {
-		dynamic_actual = 0;
-	}
-	dynamic_bytes_per_row = alpha * dynamic_bytes_per_row + (1.0 - alpha) * dynamic_actual;
+	return ApplyBudget(target_bytes, max_rows);
 }
 
 void ScanSizePredictor::LogStats(ClientContext &context) const {
 	if (total_batches == 0) {
 		return;
 	}
-	double avg_ratio = sum_overshoot_ratio / static_cast<double>(total_batches);
-	DUCKDB_LOG_TRACE(context,
-	                 "ScanSizePredictor: total_batches=%llu total_predicted_bytes=%llu total_actual_bytes=%llu "
-	                 "avg_overshoot_ratio=%.4f max_overshoot_ratio=%.4f first_batch_ratio=%.4f "
-	                 "safe_clamped_batches=%llu",
-	                 total_batches, total_predicted_bytes, total_actual_bytes, avg_ratio, max_overshoot_ratio,
-	                 first_batch_ratio, total_safe_clamped_batches);
+	DUCKDB_LOG_TRACE(context, "ScanSizePredictor: total_batches=%llu worst_bpr=%.1f safe_clamped_batches=%llu",
+	                 total_batches, worst_case_bytes_per_row, total_safe_clamped_batches);
 }
 
 void ScanSizePredictor::LogBatch(optional_ptr<ClientContext> context, idx_t target_bytes, idx_t max_rows,
@@ -425,12 +273,9 @@ void ScanSizePredictor::LogBatch(optional_ptr<ClientContext> context, idx_t targ
 	if (!context) {
 		return;
 	}
-	double bpr = static_cast<double>(fixed_bytes_per_row) + dynamic_bytes_per_row;
-	DUCKDB_LOG_TRACE(*context,
-	                 "ScanSizePredictor batch: target_bytes=%llu max_rows=%llu bpr=%.1f worst_bpr=%.1f "
-	                 "predicted=%llu safe=%llu scan_count=%llu",
-	                 target_bytes, max_rows, bpr, worst_case_bytes_per_row, last_predicted_rows, last_safe_rows,
-	                 scan_count);
+	DUCKDB_LOG_TRACE(
+	    *context, "ScanSizePredictor batch: target_bytes=%llu max_rows=%llu worst_bpr=%.1f safe=%llu scan_count=%llu",
+	    target_bytes, max_rows, worst_case_bytes_per_row, last_safe_rows, scan_count);
 }
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)

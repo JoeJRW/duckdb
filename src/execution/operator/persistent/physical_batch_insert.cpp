@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -89,7 +90,7 @@ public:
 			for (idx_t i = 1; i < collection_indexes.size(); i++) {
 				auto &collection = data_table.GetOptimisticCollection(context, collection_indexes[i]);
 				TableScanState scan_state;
-				scan_state.Initialize(column_ids);
+				scan_state.Initialize(DatabaseInstance::GetDatabase(context), column_ids, context);
 				collection.collection->InitializeScan(context, scan_state.local_state, column_ids, nullptr);
 
 				while (true) {

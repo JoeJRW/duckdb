@@ -1416,10 +1416,10 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 struct ScanTargetSizeBytesSetting {
     using RETURN_TYPE = idx_t;
     static constexpr const char *Name = "scan_target_size_bytes";
-    static constexpr const char *Description = "Target maximum size in bytes for each large-column read sub-batch, applied to query scans as well as checkpoint, commit (WAL write), and rollback reads. When set, these reads use byte-budgeted sub-batches instead of materializing a full 2048-row vector at once, bounding peak memory. GLOBAL_LOCAL: the global value covers background/shutdown/commit paths that run without a session; a local value overrides it for the current session's query scans. 0 = disabled (read full vectors).";
+    static constexpr const char *Description = "Global target size in bytes for each read sub-batch, shared by all sessions and internal scans including ALTER, index rebuild, checkpoint, commit (WAL write), and rollback. Batch sizes use column statistics; nested types and missing statistics use estimates, so this is not a strict memory limit. 0 = disabled (read full vectors).";
     static constexpr const char *InputType = "UBIGINT";
     static constexpr const char *DefaultValue = "0";
-    static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+    static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
     static constexpr idx_t SettingIndex = 85;
 };
 

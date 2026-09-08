@@ -1,0 +1,169 @@
+# name: test/sql/storage/alter_scan_target_size_bytes.test
+# description: ALTER scans honor the global budget across sub-vector boundaries
+# group: [storage]
+
+require noforcestorage
+
+load __TEST_DIR__/alter_scan_target_size_bytes.db
+
+statement ok
+SET threads=1
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0
+
+foreach budget 0 1 257 1024
+
+statement ok
+SET GLOBAL scan_target_size_bytes=${budget}
+
+statement ok
+CREATE TABLE alter_budget AS SELECT i, concat(i::VARCHAR, repeat('x', 64)) AS payload FROM range(4103) tbl(i)
+
+statement ok
+CHECKPOINT
+
+statement ok
+DELETE FROM alter_budget WHERE i % 17 = 0
+
+statement ok
+UPDATE alter_budget SET payload = concat(i::VARCHAR, repeat('y', 97)) WHERE i % 19 = 0
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+statement ok
+ALTER TABLE alter_budget ALTER COLUMN payload SET NOT NULL
+
+statement ok
+SET enable_logging=false
+
+query I
+SELECT (count(*) > 0) = (${budget} > 0) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:')
+----
+true
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:') AND message.split('target_bytes=')[2].split(' ')[1]::UBIGINT <> ${budget}
+----
+0
+
+statement error
+INSERT INTO alter_budget VALUES (9999, NULL)
+----
+NOT NULL constraint failed
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+statement ok
+ALTER TABLE alter_budget ALTER COLUMN payload SET DATA TYPE BLOB
+
+statement ok
+SET enable_logging=false
+
+query I
+SELECT (count(*) > 0) = (${budget} > 0) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:')
+----
+true
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:') AND message.split('target_bytes=')[2].split(' ')[1]::UBIGINT <> ${budget}
+----
+0
+
+query I
+SELECT count(*) FROM alter_budget WHERE payload <> concat(i::VARCHAR, repeat(CASE WHEN i % 19 = 0 THEN 'y' ELSE 'x' END, CASE WHEN i % 19 = 0 THEN 97 ELSE 64 END))::BLOB OR i % 17 = 0
+----
+0
+
+query I
+SELECT count(*) FROM alter_budget
+----
+3861
+
+statement ok
+DROP TABLE alter_budget
+
+statement ok
+CREATE TABLE alter_nulls AS SELECT i FROM range(4103) tbl(i)
+
+statement ok
+UPDATE alter_nulls SET i=NULL WHERE i=4102
+
+statement error
+ALTER TABLE alter_nulls ALTER COLUMN i SET NOT NULL
+----
+NOT NULL constraint failed
+
+query I
+SELECT count(*) FROM alter_nulls WHERE i IS NULL
+----
+1
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE alter_nulls ADD COLUMN filled INTEGER DEFAULT 42
+
+statement ok
+ALTER TABLE alter_nulls ALTER COLUMN filled SET NOT NULL
+
+query II
+SELECT count(*), sum(filled) FROM alter_nulls
+----
+4103	172326
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM pragma_table_info('alter_nulls')
+----
+1
+
+statement ok
+DROP TABLE alter_nulls
+
+endloop
+
+statement ok
+SET scan_target_size_bytes=1024
+
+statement ok
+CREATE TABLE alter_inherited AS SELECT i FROM range(4103) tbl(i)
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+statement ok
+ALTER TABLE alter_inherited ALTER COLUMN i SET NOT NULL
+
+statement ok
+ALTER TABLE alter_inherited ALTER COLUMN i SET DATA TYPE VARCHAR
+
+statement ok
+SET enable_logging=false
+
+query I
+SELECT count(*) > 0 AND bool_and(message.split('target_bytes=')[2].split(' ')[1]::UBIGINT = 1024) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:')
+----
+true
+
+query II
+SELECT count(*), sum(i::BIGINT) FROM alter_inherited
+----
+4103	8415253
+
+statement ok
+RESET GLOBAL scan_target_size_bytes

@@ -86,7 +86,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
 
-	// When a byte budget is set (from the client's scan_target_size_bytes), split each STANDARD_VECTOR_SIZE
+	// When a byte budget is set (from the global scan_target_size_bytes), split each STANDARD_VECTOR_SIZE
 	// window into smaller sub-batches so large blobs are not materialized a full 2048-row vector at a time.
 	// Budget 0 (default) keeps the original fixed 2048-row stepping bit-for-bit.
 	idx_t target_bytes = Settings::Get<ScanTargetSizeBytesSetting>(storage_manager.GetDatabase());
@@ -114,9 +114,6 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			callback(scan_vector, count);
 
-			if (sub_batch) {
-				predictor.UpdateSingle(scan_vector, count);
-			}
 			base_row_index += count;
 		}
 	}

@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 #include <set>
 #include <map>
@@ -58,8 +59,9 @@ TEST_CASE("Test DB config configuration", "[api]") {
 	}
 }
 
-TEST_CASE("Scan target byte budget uses generic setting scopes", "[api][scan_target_size_bytes]") {
+TEST_CASE("Scan target byte budget is global across sessions and scan initializers", "[api][scan_target_size_bytes]") {
 	DBConfig config;
+	REQUIRE(ScanTargetSizeBytesSetting::Scope == SettingScopeTarget::GLOBAL_ONLY);
 	REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(config) == 0);
 	config.SetOptionByName("scan_target_size_bytes", Value::UBIGINT(1024));
 	REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(config) == 1024);
@@ -68,29 +70,38 @@ TEST_CASE("Scan target byte budget uses generic setting scopes", "[api][scan_tar
 	Connection connection(database);
 	Connection other_connection(database);
 	auto &instance = DatabaseInstance::GetDatabase(*connection.context);
-	auto check_values = [&](idx_t session_value, idx_t global_value) {
-		REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(*connection.context) == session_value);
+	TableScanState session_scan;
+	TableScanState global_scan;
+	TableScanState other_scan;
+	auto check_values = [&](idx_t global_value) {
+		REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(*connection.context) == global_value);
 		REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(instance) == global_value);
 		REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(DBConfig::GetConfig(instance)) == global_value);
 		REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(*other_connection.context) == global_value);
+		session_scan.Initialize(instance, {StorageIndex(0)}, *connection.context);
+		global_scan.Initialize(instance, {StorageIndex(0)});
+		other_scan.Initialize(instance, {StorageIndex(0)}, *other_connection.context);
+		REQUIRE(session_scan.options.scan_target_size_bytes == global_value);
+		REQUIRE(global_scan.options.scan_target_size_bytes == global_value);
+		REQUIRE(other_scan.options.scan_target_size_bytes == global_value);
 	};
 
-	check_values(1024, 1024);
-	REQUIRE_NO_FAIL(connection.Query("SET SESSION scan_target_size_bytes=0"));
-	check_values(0, 1024);
+	check_values(1024);
+	REQUIRE_FAIL(connection.Query("SET SESSION scan_target_size_bytes=0"));
+	check_values(1024);
 	REQUIRE_NO_FAIL(connection.Query("SET GLOBAL scan_target_size_bytes=2048"));
-	check_values(0, 2048);
+	check_values(2048);
 	REQUIRE_NO_FAIL(connection.Query("RESET scan_target_size_bytes"));
-	check_values(2048, 2048);
-	REQUIRE_NO_FAIL(connection.Query("SET scan_target_size_bytes=512"));
-	check_values(512, 2048);
+	check_values(0);
+	REQUIRE_NO_FAIL(other_connection.Query("SET scan_target_size_bytes=512"));
+	check_values(512);
+	REQUIRE_FAIL(connection.Query("RESET SESSION scan_target_size_bytes"));
+	check_values(512);
 	REQUIRE_NO_FAIL(connection.Query("RESET GLOBAL scan_target_size_bytes"));
-	check_values(512, 0);
-	REQUIRE_NO_FAIL(connection.Query("RESET SESSION scan_target_size_bytes"));
-	check_values(0, 0);
+	check_values(0);
 
 	REQUIRE_FAIL(connection.Query("SET scan_target_size_bytes=-1"));
-	check_values(0, 0);
+	check_values(0);
 }
 
 TEST_CASE("Test allowed options", "[api]") {

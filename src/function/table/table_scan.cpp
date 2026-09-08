@@ -140,7 +140,8 @@ public:
 		for (const auto &col_idx : input.column_indexes) {
 			l_state->column_ids.push_back(bind_data.table.GetStorageIndex(col_idx));
 		}
-		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
+		l_state->scan_state.Initialize(DatabaseInstance::GetDatabase(context.client), l_state->column_ids,
+		                               context.client, input.filters.get());
 		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
 	}
@@ -289,7 +290,8 @@ public:
 			l_state->scan_state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
 		}
 
-		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
+		l_state->scan_state.Initialize(DatabaseInstance::GetDatabase(context.client), std::move(storage_ids),
+		                               context.client, input.filters, input.sample_options);
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {
@@ -297,14 +299,12 @@ public:
 		}
 
 		l_state->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
-		l_state->scan_state.options.scan_target_size_bytes = Settings::Get<ScanTargetSizeBytesSetting>(context.client);
 		return std::move(l_state);
 	}
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
 		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
-		l_state.scan_state.options.scan_target_size_bytes = Settings::Get<ScanTargetSizeBytesSetting>(context);
 
 		do {
 			if (bind_data.is_create_index) {

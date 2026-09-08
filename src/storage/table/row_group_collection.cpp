@@ -4,6 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
@@ -344,7 +345,7 @@ RowGroupIterationHelper::RowGroupIterator::RowGroupIterator(optional_ptr<RowGrou
 
 		// initialize the scan
 		state = make_uniq<TableScanState>();
-		state->Initialize(column_ids, nullptr);
+		state->Initialize(collection->GetAttached().GetDatabase(), column_ids);
 		collection->InitializeScan(QueryContext(), state->local_state, column_ids, nullptr);
 		// scan the first chunk
 		this->operator++();
@@ -1208,14 +1209,9 @@ public:
 		new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
 
 		TableScanState scan_state;
-		scan_state.Initialize(column_ids);
+		scan_state.Initialize(checkpoint_state.writer.GetDatabase(), column_ids);
 		scan_state.table_state.Initialize(QueryContext(), types);
 		scan_state.table_state.max_row = idx_t(-1);
-		// Bound the merge-read peak memory via the byte budget (0 = whole vector), mirroring the checkpoint
-		// write side. Without this, scanning a row group with wide columns materializes a full vector at once
-		// and can OOM under a low memory_limit.
-		scan_state.options.scan_target_size_bytes =
-		    Settings::Get<ScanTargetSizeBytesSetting>(checkpoint_state.writer.GetDatabase());
 		idx_t merged_groups = 0;
 		idx_t total_row_groups = vacuum_state.row_group_counts.size();
 		optional_idx row_start;
@@ -1944,7 +1940,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	executor.AddExpression(cast_expr);
 
 	TableScanState scan_state;
-	scan_state.Initialize(bound_columns);
+	scan_state.Initialize(GetAttached().GetDatabase(), bound_columns, context);
 	scan_state.table_state.Initialize(context, GetTypes());
 	scan_state.table_state.max_row = row_groups->GetBaseRowId() + total_rows;
 
@@ -1990,7 +1986,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 	auto &transaction = DuckTransaction::Get(*client_context, parent.db);
 
 	TableScanState state;
-	state.Initialize(column_ids, nullptr);
+	state.Initialize(GetAttached().GetDatabase(), column_ids, client_context);
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
 	while (true) {

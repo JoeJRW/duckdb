@@ -11,7 +11,6 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -258,14 +257,14 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,
                                const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters) {
 	auto &local_storage = LocalStorage::Get(transaction);
-	state.Initialize(column_ids, context, table_filters);
+	state.Initialize(db.GetDatabase(), column_ids, context, table_filters);
 	row_groups->InitializeScan(context, state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
 
 void DataTable::InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
                                          const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row) {
-	state.Initialize(column_ids);
+	state.Initialize(db.GetDatabase(), column_ids);
 	row_groups->InitializeScanWithOffset(QueryContext(), state.table_state, column_ids, start_row, end_row);
 }
 
@@ -403,7 +402,7 @@ void DataTable::RebuildIndexes() {
 
 		CreateIndexScanState state;
 		auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
-		state.Initialize(scan_column_ids, nullptr);
+		state.Initialize(db.GetDatabase(), scan_column_ids);
 		QueryContext context;
 		row_groups->InitializeScan(context, state.table_state, scan_column_ids, nullptr);
 		row_groups->InitializeCreateIndexScan(state);
@@ -1240,9 +1239,6 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 	CreateIndexScanState state;
 
 	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
-	// This path (commit WAL write / rollback RevertAppend) runs without a ClientContext, so it reads the
-	// global scan_target_size_bytes to sub-batch large-column reads and bound peak memory (0 = whole vector).
-	state.options.scan_target_size_bytes = Settings::Get<ScanTargetSizeBytesSetting>(db.GetDatabase());
 	auto row_start_aligned =
 	    state.table_state.row_group->GetRowStart() + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 

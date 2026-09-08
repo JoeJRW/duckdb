@@ -225,16 +225,9 @@ private:
 	idx_t always_true_filters = 0;
 };
 
-//! Adaptive batch size predictor for sub-vector scanning.
+//! Statistics-based batch size predictor for sub-vector scanning.
 //!
 //! Goal: given a byte budget (scan_target_size_bytes), predict how many rows to scan per batch.
-//!
-//! Two-phase approach:
-//!   1. Lazy cold start (on the first PredictBatchSize call) from row group column statistics
-//!      (TotalStringLength, min/max). Fixed-size columns contribute exact widths; variable-size columns
-//!      use stat-based estimates.
-//!   2. Update() — after each batch, refine the variable-size estimate via EMA (old-value weight=0.3,
-//!      new-data weight=0.7) using actual scanned bytes (head-block sampling of string_t::GetSize()).
 //!
 //! `initialized` is cleared at each row group boundary, so the next PredictBatchSize re-computes the
 //! cold-start estimate, since string length distributions can vary across row groups.
@@ -242,41 +235,25 @@ struct ScanSizePredictor {
 	//! Default per-row estimate when column statistics are unavailable
 	static constexpr double DEFAULT_BYTES_PER_ROW = 256.0;
 
-	//! Sum of fixed-size column widths (INT, DOUBLE, etc.) — exact, no EMA needed
-	idx_t fixed_bytes_per_row = 0;
-	//! Aggregated per-row estimate for all variable-size columns. Only string-backed types
-	//! (PhysicalType::VARCHAR — VARCHAR, BLOB, BIT, ...) are genuinely measured (stat-based cold
-	//! start + EMA feedback); LIST/MAP/STRUCT/ARRAY contribute a constant DEFAULT_BYTES_PER_ROW
-	//! placeholder and are not tracked.
-	double dynamic_bytes_per_row = 0;
 	//! Per-row cap estimate: fixed column widths + per-VARCHAR (string_t slot + MaxStringLength)
 	//! when string statistics are available. Nested types and missing statistics use DEFAULT_BYTES_PER_ROW,
 	//! which is not a worst-case bound: whole nested values can exceed the target and still cause OOM.
-	//! Unlike dynamic_bytes_per_row, this never decays. Computed at cold start; 0 = no cap applied.
+	//! Computed at cold start; 0 = no cap applied.
 	//! The minimum batch is one row, even when that row exceeds the target. This is not a query memory limit.
 	double worst_case_bytes_per_row = 0;
 	bool initialized = false;
 
-	//! Accuracy counters — accumulated across batches within a scan, used for diagnostics.
-	//! Nested payloads are not measured, so these counters can understate actual bytes and overshoot.
+	//! Batch counters accumulated across a scan, not measurements of actual memory usage.
 	idx_t total_batches = 0;
-	idx_t total_predicted_bytes = 0;
-	idx_t total_actual_bytes = 0;
-	double max_overshoot_ratio = 0.0; //! worst-case actual/predicted ratio across all batches
-	double sum_overshoot_ratio = 0.0; //! sum of per-batch ratios (divide by total_batches for avg)
-	double first_batch_ratio = 0.0;   //! actual/predicted on the very first batch (measures cold-start accuracy)
-	//! Batches where the worst-case cap (worst_case_bytes_per_row) was the binding constraint rather than the
-	//! EMA/max_rows result — i.e. the cap shrank the batch. Measures the pessimism cost, not OOM safety.
+	//! Batches where the byte cap was tighter than max_rows. Measures the pessimism cost, not OOM safety.
 	idx_t total_safe_clamped_batches = 0;
 
 	//! Detail of the most recent PredictBatchSize call, for optional per-batch TRACE logging at the scan
-	//! call site. last_predicted_rows is the EMA-based batch size before the worst-case cap; last_safe_rows
-	//! is the worst-case cap (0 when no cap applied). The returned scan_count is min(these two).
-	idx_t last_predicted_rows = 0;
+	//! call site. last_safe_rows is the byte cap before clamping to [1, max_rows].
 	idx_t last_safe_rows = 0;
 
 	//! Invalidate the cold-start estimate so the next PredictBatchSize re-computes it (e.g. at a row group
-	//! boundary). Accuracy counters accumulate across the whole scan and are intentionally left untouched.
+	//! boundary). Batch counters accumulate across the whole scan and are intentionally left untouched.
 	void Reset() {
 		initialized = false;
 	}
@@ -285,23 +262,18 @@ struct ScanSizePredictor {
 	//! Lazily computes the per-row byte estimate from row group statistics on the first call.
 	idx_t PredictBatchSize(idx_t target_bytes, idx_t max_rows, const vector<StorageIndex> &column_ids,
 	                       RowGroup &row_group);
-	//! Refine dynamic_bytes_per_row via EMA from actual scan result
-	void Update(DataChunk &result);
-
 	//! Single-column variant for the checkpoint read path (one ColumnData, possibly nested, scanned into a
-	//! single Vector). Cold-starts from the column's own statistics using the FULL max string length
-	//! (more conservative than PredictBatchSize's 0.5x factor) so the first batch of uniformly large blobs
-	//! stays within budget; refined by UpdateSingle. Reuses the same fields/EMA as the multi-column path.
+	//! single Vector). Uses the column's input statistics instead of row group statistics.
 	idx_t PredictBatchSizeSingle(idx_t target_bytes, idx_t max_rows, const LogicalType &type,
 	                             optional_ptr<BaseStatistics> stats);
-	//! Refine dynamic_bytes_per_row via EMA from the exact allocation size (incl. string heap) of one vector.
-	void UpdateSingle(Vector &vec, idx_t count);
-
-	//! Emit the accumulated accuracy counters as a single TRACE line at scan completion. No-op if no batch ran.
+	//! Emit the accumulated batch counters as a single TRACE line at scan completion. No-op if no batch ran.
 	void LogStats(ClientContext &context) const;
-	//! Emit the detail of the most recent PredictBatchSize call (predicted vs worst-case cap vs final scan_count)
+	//! Emit the detail of the most recent PredictBatchSize call (byte cap and final scan_count)
 	//! as a TRACE line. No-op when context is not a valid session (e.g. checkpoint / WAL paths).
 	void LogBatch(optional_ptr<ClientContext> context, idx_t target_bytes, idx_t max_rows, idx_t scan_count) const;
+
+private:
+	idx_t ApplyBudget(idx_t target_bytes, idx_t max_rows);
 };
 
 //! Tracks progress within a single vector during sub-batch scanning.
@@ -460,8 +432,8 @@ public:
 	ScanSamplingInfo sampling_info;
 
 public:
-	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
-	                optional_ptr<TableFilterSet> table_filters = nullptr,
+	void Initialize(DatabaseInstance &db, vector<StorageIndex> column_ids,
+	                optional_ptr<ClientContext> context = nullptr, optional_ptr<TableFilterSet> table_filters = nullptr,
 	                optional_ptr<SampleOptions> table_sampling = nullptr);
 
 	const vector<StorageIndex> &GetColumnIds();

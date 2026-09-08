@@ -20,7 +20,7 @@ SELECT i, geom, geom::VARCHAR AS expected FROM (
 )
 
 statement ok
-SET SESSION scan_target_size_bytes=1024
+SET GLOBAL scan_target_size_bytes=1024
 
 query I
 SELECT count(*) FROM geometries WHERE geom::VARCHAR = expected
@@ -41,7 +41,7 @@ SELECT count(*) FROM geometries WHERE geom::VARCHAR = expected
 restart
 
 statement ok
-SET SESSION scan_target_size_bytes=1024
+SET GLOBAL scan_target_size_bytes=1024
 
 query I
 SELECT count(*) FROM geometries WHERE geom::VARCHAR = expected

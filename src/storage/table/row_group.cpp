@@ -810,14 +810,6 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			continue;
 		}
 		result.SetCardinality(emit_count);
-		if (sub_batch_enabled) {
-			// Feed the predictor on every emitted chunk while sub-batching is enabled — including a vector
-			// that was demoted to the full path this iteration (scan_count == max_count). Gating on
-			// use_sub_batch instead would starve the predictor exactly when a demoted full-vector read may
-			// have overshot the budget, freezing a low EMA and locking the scan out of the sub-batch path for
-			// the rest of the row group. per-row byte size is filter-independent, so the result is a valid sample.
-			state.size_predictor.Update(result);
-		}
 		return;
 	}
 }
