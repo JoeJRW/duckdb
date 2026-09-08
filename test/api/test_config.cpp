@@ -61,7 +61,7 @@ TEST_CASE("Test DB config configuration", "[api]") {
 
 TEST_CASE("Scan target byte budget is global across sessions and scan initializers", "[api][scan_target_size_bytes]") {
 	DBConfig config;
-	REQUIRE(ScanTargetSizeBytesSetting::Scope == SettingScopeTarget::GLOBAL_ONLY);
+	REQUIRE((ScanTargetSizeBytesSetting::Scope == SettingScopeTarget::GLOBAL_ONLY));
 	REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(config) == 0);
 	config.SetOptionByName("scan_target_size_bytes", Value::UBIGINT(1024));
 	REQUIRE(Settings::Get<ScanTargetSizeBytesSetting>(config) == 1024);

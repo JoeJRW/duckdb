@@ -21,7 +21,7 @@ TEST_CASE("Scan size predictor does not interpret geometry statistics as string 
 	REQUIRE(stats.GetStatsType() == StatisticsType::GEOMETRY_STATS);
 	ScanSizePredictor predictor;
 	REQUIRE(predictor.PredictBatchSizeSingle(1024, STANDARD_VECTOR_SIZE, type, &stats) == 4);
-	REQUIRE(predictor.worst_case_bytes_per_row == ScanSizePredictor::DEFAULT_BYTES_PER_ROW);
+	REQUIRE((predictor.worst_case_bytes_per_row == ScanSizePredictor::DEFAULT_BYTES_PER_ROW));
 }
 
 TEST_CASE("Scan size predictor uses maximum string lengths for VARCHAR BLOB and JSON", "[scan_size_predictor]") {
@@ -59,7 +59,7 @@ TEST_CASE("Scan size predictor applies the budget without feedback", "[scan_size
 TEST_CASE("Scan size predictor retains its fallback for unavailable string statistics", "[scan_size_predictor]") {
 	ScanSizePredictor predictor;
 	REQUIRE(predictor.PredictBatchSizeSingle(1024, 10, LogicalType::VARCHAR, nullptr) == 4);
-	REQUIRE(predictor.worst_case_bytes_per_row == ScanSizePredictor::DEFAULT_BYTES_PER_ROW);
+	REQUIRE((predictor.worst_case_bytes_per_row == ScanSizePredictor::DEFAULT_BYTES_PER_ROW));
 	predictor.Reset();
 	auto stats = BaseStatistics::CreateEmpty(LogicalType::VARCHAR);
 	StringStats::SetMaxStringLength(stats, 0);
