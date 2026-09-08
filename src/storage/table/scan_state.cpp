@@ -202,8 +202,9 @@ ParallelCollectionScanState::GetNextRowGroup(RowGroupSegmentTree &row_groups, Se
 //===----------------------------------------------------------------------===//
 
 //! Worst-case materialized bytes for one column: exact width for fixed-size types; for VARCHAR the
-//! string_t slot plus the row group's max string length (no row exceeds it), so a batch sized by this
-//! bound can never overshoot the byte budget. Unknown variable-size types fall back to the default.
+//! string_t slot plus the row group's max string length when string statistics are available.
+//! Other variable-size types, including STRUCT/LIST/MAP/ARRAY, use a heuristic fallback, not a bound:
+//! nested child payloads are not included, so scanning whole nested values can exceed the target and OOM.
 static double WorstCaseBytesPerRow(PhysicalType physical_type, optional_ptr<BaseStatistics> stats) {
 	if (TypeIsConstantSize(physical_type)) {
 		return static_cast<double>(GetTypeIdSize(physical_type));
@@ -237,6 +238,7 @@ idx_t ScanSizePredictor::PredictBatchSize(idx_t target_bytes, idx_t max_rows, co
 			if (TypeIsConstantSize(physical_type)) {
 				fixed_bytes_per_row += GetTypeIdSize(physical_type);
 			} else {
+				// Whole nested values use this placeholder without inspecting child statistics.
 				double estimate = DEFAULT_BYTES_PER_ROW;
 				if (row_count > 0 && physical_type == PhysicalType::VARCHAR &&
 				    stats->GetStatsType() == StatisticsType::STRING_STATS &&
@@ -262,11 +264,10 @@ idx_t ScanSizePredictor::PredictBatchSize(idx_t target_bytes, idx_t max_rows, co
 	last_predicted_rows = result;
 	last_safe_rows = 0;
 
-	// Hard worst-case cap. The EMA above tracks the *average* row width, so on a sparse->cluster
-	// transition it under-estimates and the first batch into the cluster overshoots the budget (a
-	// reactive predictor cannot foresee it). worst_case_bytes_per_row bounds the batch by the *largest*
-	// possible row, guaranteeing the materialized chunk stays within target_bytes regardless of where the
-	// batch lands. This is the constraint that actually prevents the OOM.
+	// Cap by the largest row width for fixed-size columns and VARCHAR with maximum-length statistics,
+	// rather than relying on the EMA to foresee a sparse->cluster transition. Fallback estimates for
+	// nested types or missing statistics are not bounds. At least one row is scanned even if it exceeds
+	// target_bytes, and this cap does not account for all query memory allocations.
 	if (worst_case_bytes_per_row > 0) {
 		auto safe_count = static_cast<idx_t>(static_cast<double>(target_bytes) / worst_case_bytes_per_row);
 		last_safe_rows = safe_count;
@@ -306,6 +307,10 @@ static idx_t ComputeActualChunkBytes(DataChunk &result) {
 			}
 			total += sampled_bytes * count / sample_count;
 		} else {
+			// Known limitation: STRUCT/LIST/MAP/ARRAY child vectors are not recursively measured.
+			// This placeholder also feeds the EMA and byte diagnostics, so neither reflects large nested
+			// payloads. Fixing feedback alone cannot prevent an oversized first batch; cold-start sizing
+			// and the cap also need child sizes and, for LIST/MAP, per-row element counts.
 			total += static_cast<idx_t>(ScanSizePredictor::DEFAULT_BYTES_PER_ROW) * count;
 		}
 	}

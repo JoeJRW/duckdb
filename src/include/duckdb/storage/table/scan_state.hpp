@@ -249,17 +249,16 @@ struct ScanSizePredictor {
 	//! start + EMA feedback); LIST/MAP/STRUCT/ARRAY contribute a constant DEFAULT_BYTES_PER_ROW
 	//! placeholder and are not tracked.
 	double dynamic_bytes_per_row = 0;
-	//! Worst-case per-row byte bound from row group statistics: fixed column widths + per-VARCHAR
-	//! (string_t slot + MaxStringLength). Every row's string is <= MaxStringLength by definition, so a
-	//! batch sized by target_bytes / worst_case_bytes_per_row can never exceed the budget — even if it
-	//! lands entirely on the largest blobs. Unlike dynamic_bytes_per_row (an average-tracking EMA) this
-	//! never decays. A reactive EMA cannot foresee a sparse->cluster transition and always overshoots the
-	//! first such batch; this hard cap is what actually bounds peak memory. Computed at cold start;
-	//! 0 = not computed (no cap applied).
+	//! Per-row cap estimate: fixed column widths + per-VARCHAR (string_t slot + MaxStringLength)
+	//! when string statistics are available. Nested types and missing statistics use DEFAULT_BYTES_PER_ROW,
+	//! which is not a worst-case bound: whole nested values can exceed the target and still cause OOM.
+	//! Unlike dynamic_bytes_per_row, this never decays. Computed at cold start; 0 = no cap applied.
+	//! The minimum batch is one row, even when that row exceeds the target. This is not a query memory limit.
 	double worst_case_bytes_per_row = 0;
 	bool initialized = false;
 
-	//! Accuracy counters — accumulated across batches within a scan, used for diagnostics
+	//! Accuracy counters — accumulated across batches within a scan, used for diagnostics.
+	//! Nested payloads are not measured, so these counters can understate actual bytes and overshoot.
 	idx_t total_batches = 0;
 	idx_t total_predicted_bytes = 0;
 	idx_t total_actual_bytes = 0;
@@ -267,7 +266,7 @@ struct ScanSizePredictor {
 	double sum_overshoot_ratio = 0.0; //! sum of per-batch ratios (divide by total_batches for avg)
 	double first_batch_ratio = 0.0;   //! actual/predicted on the very first batch (measures cold-start accuracy)
 	//! Batches where the worst-case cap (worst_case_bytes_per_row) was the binding constraint rather than the
-	//! EMA/max_rows result — i.e. the hard OOM guard actively shrank the batch. Measures the pessimism cost.
+	//! EMA/max_rows result — i.e. the cap shrank the batch. Measures the pessimism cost, not OOM safety.
 	idx_t total_safe_clamped_batches = 0;
 
 	//! Detail of the most recent PredictBatchSize call, for optional per-batch TRACE logging at the scan
