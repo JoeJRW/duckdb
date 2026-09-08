@@ -1,0 +1,64 @@
+# name: test/sql/storage/scan_json_wal_unaligned.test
+# description: Byte-budgeted JSON appends preserve non-aligned WAL ranges and rollback correctly
+# group: [storage]
+
+require json
+
+require noforcestorage
+
+load __TEST_DIR__/scan_json_wal_unaligned.db
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+SET GLOBAL scan_target_size_bytes=1024
+
+statement ok
+CREATE TABLE json_wal(i BIGINT, j JSON)
+
+statement ok
+INSERT INTO json_wal SELECT i, concat('{"id":', i, ',"payload":"', repeat('x', 4000), '"}')::JSON FROM range(1000) tbl(i)
+
+statement ok
+INSERT INTO json_wal SELECT i, concat('{"id":', i, ',"payload":"', repeat('x', 4000), '"}')::JSON FROM range(1000, 1500) tbl(i)
+
+restart
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+SET GLOBAL scan_target_size_bytes=1024
+
+query I
+SELECT count(*) FROM json_wal WHERE json_extract_string(j, '$.id')::BIGINT=i AND length(json_extract_string(j, '$.payload'))=4000
+----
+1500
+
+statement ok
+INSERT INTO json_wal SELECT i, concat('{"id":', i, ',"payload":"', repeat('x', 4000), '"}')::JSON FROM range(1500, 2600) tbl(i)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO json_wal SELECT i, concat('{"id":', i, ',"payload":"rollback"}')::JSON FROM range(2600, 2701) tbl(i)
+
+statement ok
+ROLLBACK
+
+query II
+SELECT count(*), count(DISTINCT i) FROM json_wal
+----
+2600	2600
+
+restart
+
+statement ok
+SET GLOBAL scan_target_size_bytes=1024
+
+query I
+SELECT count(*) FROM json_wal WHERE json_extract_string(j, '$.id')::BIGINT=i AND length(json_extract_string(j, '$.payload'))=4000
+----
+2600

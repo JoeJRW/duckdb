@@ -1,0 +1,83 @@
+# name: test/sql/storage/scan_json_checkpoint_memory.test_slow
+# description: JSON checkpoint reads fail without a budget and succeed with a global byte budget
+# group: [storage]
+
+require json
+
+require noforcestorage
+
+require vector_size 2048
+
+require 64bit
+
+load __TEST_DIR__/scan_json_checkpoint_memory.db
+
+statement ok
+SET memory_limit='20GB';
+
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE TABLE t AS SELECT i AS id, to_json(repeat('x', 249998)) AS b FROM range(2500) tbl(i);
+
+query I
+SELECT type FROM pragma_table_info('t') WHERE name='b';
+----
+JSON
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2500	625000000
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+SET memory_limit='300MB';
+
+statement error
+CHECKPOINT;
+----
+Out of Memory
+
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2500	625000000
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+CHECKPOINT;
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2500	625000000
+
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2500	625000000

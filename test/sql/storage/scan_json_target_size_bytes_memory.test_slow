@@ -1,0 +1,155 @@
+# name: test/sql/storage/scan_json_target_size_bytes_memory.test_slow
+# description: Whole JSON objects honor scan budgets under memory pressure during queries and ALTER
+# group: [storage]
+
+require json
+
+require noforcestorage
+
+require vector_size 2048
+
+require 64bit
+
+load __TEST_DIR__/scan_json_target_size_bytes_memory.db
+
+statement ok
+SET memory_limit='20GB'
+
+statement ok
+SET threads=1
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216
+
+statement ok
+CREATE TABLE large_json AS SELECT i, concat('{"id":', i, ',"payload":"', repeat('x', 300000), '"}')::JSON AS j FROM range(2048) tbl(i)
+
+statement ok
+CHECKPOINT
+
+restart
+
+foreach threads 1 4
+
+statement ok
+SET threads=${threads}
+
+statement ok
+SET memory_limit='300MB'
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0
+
+statement error
+SELECT count(*) FROM large_json WHERE length(j::VARCHAR) > 300000
+----
+Out of Memory
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216
+
+query I
+SELECT count(*) FROM large_json WHERE length(j::VARCHAR) > 300000
+----
+2048
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0
+
+statement error
+SELECT count(*) FROM large_json WHERE i >= 85 AND length(json_extract_string(j, '$.payload')) = 300000
+----
+Out of Memory
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216
+
+query I
+SELECT count(*) FROM large_json WHERE i >= 85 AND length(json_extract_string(j, '$.payload')) = 300000
+----
+1963
+
+endloop
+
+statement ok
+SET memory_limit='20GB'
+
+statement ok
+SET threads=1
+
+statement ok
+DELETE FROM large_json WHERE i % 31 = 0
+
+statement ok
+UPDATE large_json SET j=concat('{"id":', i, ',"payload":"', repeat('y', 300000), '"}')::JSON WHERE i < 10
+
+statement ok
+SET memory_limit='300MB'
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0
+
+statement error
+SELECT count(*) FROM large_json WHERE length(j::VARCHAR) > 300000
+----
+Out of Memory
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216
+
+query I
+SELECT count(*) FROM large_json WHERE json_extract_string(j, '$.id')::BIGINT=i AND length(json_extract_string(j, '$.payload'))=300000
+----
+1981
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0
+
+statement error
+ALTER TABLE large_json ALTER COLUMN j SET NOT NULL
+----
+Out of Memory
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216
+
+statement ok
+ALTER TABLE large_json ALTER COLUMN j SET NOT NULL
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0
+
+statement error
+ALTER TABLE large_json ALTER COLUMN j SET DATA TYPE VARCHAR
+----
+Out of Memory
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216
+
+statement ok
+ALTER TABLE large_json ALTER COLUMN j SET DATA TYPE VARCHAR
+
+query I
+SELECT count(*) FROM large_json WHERE json_extract_string(j, '$.id')::BIGINT=i
+----
+1981
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216
+
+query I
+SELECT count(*) FROM large_json WHERE json_extract_string(j, '$.id')::BIGINT=i
+----
+1981

@@ -1,0 +1,129 @@
+# name: test/sql/storage/scan_json_wal_memory.test_slow
+# description: JSON wal reads fail without a budget and succeed with a global byte budget
+# group: [storage]
+
+require json
+
+require noforcestorage
+
+require vector_size 2048
+
+require 64bit
+
+load __TEST_DIR__/scan_json_wal_memory.db
+
+statement ok
+SET checkpoint_threshold='1TB';
+
+statement ok
+SET threads=4;
+
+statement ok
+CREATE TABLE t(id INTEGER, b JSON);
+
+query I
+SELECT type FROM pragma_table_info('t') WHERE name='b';
+----
+JSON
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement error
+COMMIT;
+----
+Failed to commit
+
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query I
+SELECT count(*) FROM t;
+----
+0
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216;
+
+statement ok
+SET memory_limit='300MB';
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+INSERT INTO t SELECT i, to_json(repeat('x', 249998)) FROM range(256) tbl(i);
+
+statement ok
+COMMIT;
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2048	512000000
+
+restart
+
+statement ok
+SET memory_limit='20GB';
+
+query II
+SELECT count(*), sum(length(b)) FROM t;
+----
+2048	512000000

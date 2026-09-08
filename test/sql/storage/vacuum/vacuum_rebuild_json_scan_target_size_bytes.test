@@ -1,0 +1,139 @@
+# name: test/sql/storage/vacuum/vacuum_rebuild_json_scan_target_size_bytes.test
+# description: Global scan budgets preserve JSON index keys and row IDs across vacuum and reopen
+# group: [vacuum]
+
+require json
+
+require vacuum_rebuild_indexes
+
+statement ok
+ATTACH '{TEST_DIR}/rebuild_json_budget_off.db' AS db_off (STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 8192);
+
+statement ok
+ATTACH '{TEST_DIR}/rebuild_json_budget_on.db' AS db_on (STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 8192);
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+CREATE TABLE db_off.t(i INTEGER, j JSON);
+
+statement ok
+CREATE INDEX idx_off ON db_off.t((j::VARCHAR));
+
+statement ok
+CREATE TABLE db_on.t(i INTEGER, j JSON);
+
+statement ok
+CREATE INDEX idx_on ON db_on.t((j::VARCHAR));
+
+statement ok
+INSERT INTO db_off.t SELECT i, to_json(lpad(i::VARCHAR, 10, '0')) FROM range(24576) t(i);
+
+statement ok
+INSERT INTO db_on.t SELECT i, to_json(lpad(i::VARCHAR, 10, '0')) FROM range(24576) t(i);
+
+statement ok
+CHECKPOINT db_off;
+
+statement ok
+CHECKPOINT db_on;
+
+query II
+SELECT (SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db_off.t')),
+       (SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db_on.t'));
+----
+3	3
+
+statement ok
+DELETE FROM db_off.t WHERE i < 8192;
+
+statement ok
+DELETE FROM db_on.t WHERE i < 8192;
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+statement ok
+CHECKPOINT db_off;
+
+statement ok
+SET GLOBAL scan_target_size_bytes=1024;
+
+query I
+SELECT current_setting('scan_target_size_bytes');
+----
+1024
+
+statement ok
+CHECKPOINT db_on;
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0;
+
+query II
+SELECT (SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db_off.t')),
+       (SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db_on.t'));
+----
+2	2
+
+query II
+EXPLAIN ANALYZE SELECT i, rowid FROM db_on.t WHERE j::VARCHAR = '"0000008192"'
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT COUNT(*) FROM ((SELECT i, rowid FROM db_off.t) EXCEPT (SELECT i, rowid FROM db_on.t));
+----
+0
+
+query I
+SELECT COUNT(*) FROM ((SELECT i, rowid FROM db_on.t) EXCEPT (SELECT i, rowid FROM db_off.t));
+----
+0
+
+query II
+SELECT i, rowid FROM db_on.t WHERE i IN (8192, 8277, 8278, 10000, 16383, 16384, 24574, 24575) ORDER BY i;
+----
+8192	0
+8277	85
+8278	86
+10000	1808
+16383	8191
+16384	8192
+24574	16382
+24575	16383
+
+query II
+SELECT i, rowid FROM db_off.t WHERE i IN (8192, 8277, 8278, 10000, 16383, 16384, 24574, 24575) ORDER BY i;
+----
+8192	0
+8277	85
+8278	86
+10000	1808
+16383	8191
+16384	8192
+24574	16382
+24575	16383
+
+query II
+SELECT (SELECT COUNT(*) FROM db_off.t), (SELECT COUNT(*) FROM db_on.t);
+----
+16384	16384
+
+statement ok
+DETACH db_off;
+
+statement ok
+DETACH db_on;
+
+statement ok
+ATTACH '{TEST_DIR}/rebuild_json_budget_on.db' AS db_on (STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 8192);
+
+query II
+SELECT i, rowid FROM db_on.t WHERE j::VARCHAR = '"0000024575"';
+----
+24575	16383

@@ -1,0 +1,103 @@
+# name: test/sql/storage/scan_json_workflow_topn_memory.test_slow
+# description: A/B test the workflow JSON-filtered ORDER BY id DESC LIMIT 1 query under memory pressure
+# group: [storage]
+
+require json
+
+require noforcestorage
+
+require vector_size 2048
+
+require 64bit
+
+load __TEST_DIR__/scan_json_workflow_topn_memory.db
+
+statement ok
+CREATE SCHEMA uniserver
+
+statement ok
+SET threads=1
+
+statement ok
+SET force_compression='uncompressed'
+
+statement ok
+SET checkpoint_threshold='1TB'
+
+query I nosort workflow_expected
+SELECT concat('{"task_id":2043,"payload":"', repeat('r', 300000), '"}')::JSON
+
+foreach params_payload_size 300000 64
+
+statement ok
+SET memory_limit='20GB'
+
+statement ok
+SET GLOBAL scan_target_size_bytes=16777216
+
+statement ok
+CREATE TABLE uniserver.task AS SELECT i AS id, CASE WHEN i=2047 THEN TIMESTAMP '2026-08-28 00:00:00' ELSE TIMESTAMP '2026-09-01 00:00:00' END AS created_at, CASE WHEN i=2046 THEN TIMESTAMP '2026-09-02 00:00:00' ELSE NULL::TIMESTAMP END AS deleted_at, concat('{"human_case_common_input":{"workflow_run_id":"', CASE WHEN i=2045 THEN 'other' ELSE '49793237' END, '","node":{"node_key":"', CASE WHEN i=2044 THEN 'other' ELSE 'n_xwEF9Jeum72ylDoL' END, '"}},"task_id":', i, ',"payload":"', repeat('p', ${params_payload_size}), '"}')::JSON AS params, concat('{"task_id":', i, ',"payload":"', repeat('r', 300000), '"}')::JSON AS temporal_workflow_result FROM range(2048) tbl(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT count(*) FROM pragma_table_info('uniserver.task') WHERE name IN ('params', 'temporal_workflow_result') AND type='JSON'
+----
+2
+
+query I nosort workflow_expected
+select `uniserver`.`task`.`temporal_workflow_result` AS `temporal_workflow_result` from `uniserver`.`task` where ((`uniserver`.`task`.`created_at` > '2026-08-29 16:45:19') and (((`uniserver`.`task`.`params`)->>('$.human_case_common_input.workflow_run_id')) = '49793237') and (((`uniserver`.`task`.`params`)->>('$.human_case_common_input.node.node_key')) = 'n_xwEF9Jeum72ylDoL') and (`uniserver`.`task`.`deleted_at` is null)) order by `uniserver`.`task`.`id` desc limit 1
+
+query II
+EXPLAIN select `uniserver`.`task`.`temporal_workflow_result` AS `temporal_workflow_result` from `uniserver`.`task` where ((`uniserver`.`task`.`created_at` > '2026-08-29 16:45:19') and (((`uniserver`.`task`.`params`)->>('$.human_case_common_input.workflow_run_id')) = '49793237') and (((`uniserver`.`task`.`params`)->>('$.human_case_common_input.node.node_key')) = 'n_xwEF9Jeum72ylDoL') and (`uniserver`.`task`.`deleted_at` is null)) order by `uniserver`.`task`.`id` desc limit 1
+----
+physical_plan	<REGEX>:.*TOP_N.*
+
+statement ok
+SET memory_limit='300MB'
+
+statement ok
+SET GLOBAL scan_target_size_bytes=0
+
+statement error
+select `uniserver`.`task`.`temporal_workflow_result` AS `temporal_workflow_result` from `uniserver`.`task` where ((`uniserver`.`task`.`created_at` > '2026-08-29 16:45:19') and (((`uniserver`.`task`.`params`)->>('$.human_case_common_input.workflow_run_id')) = '49793237') and (((`uniserver`.`task`.`params`)->>('$.human_case_common_input.node.node_key')) = 'n_xwEF9Jeum72ylDoL') and (`uniserver`.`task`.`deleted_at` is null)) order by `uniserver`.`task`.`id` desc limit 1
+----
+Out of Memory
+
+foreach target_bytes 1048576 16777216
+
+statement ok
+SET GLOBAL scan_target_size_bytes=${target_bytes}
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+CALL enable_logging(level='trace')
+
+query I nosort workflow_expected
+select `uniserver`.`task`.`temporal_workflow_result` AS `temporal_workflow_result` from `uniserver`.`task` where ((`uniserver`.`task`.`created_at` > '2026-08-29 16:45:19') and (((`uniserver`.`task`.`params`)->>('$.human_case_common_input.workflow_run_id')) = '49793237') and (((`uniserver`.`task`.`params`)->>('$.human_case_common_input.node.node_key')) = 'n_xwEF9Jeum72ylDoL') and (`uniserver`.`task`.`deleted_at` is null)) order by `uniserver`.`task`.`id` desc limit 1
+
+statement ok
+SET enable_logging=false
+
+query I
+SELECT count(*) > 0 FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:')
+----
+true
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message.starts_with('ScanSizePredictor batch:') AND message.split('scan_count=')[2]::BIGINT > 1 AND message.split('scan_count=')[2]::BIGINT * message.split('worst_bpr=')[2].split(' ')[1]::DOUBLE > ${target_bytes}
+----
+0
+
+endloop
+
+statement ok
+SET memory_limit='20GB'
+
+statement ok
+DROP TABLE uniserver.task
+
+endloop

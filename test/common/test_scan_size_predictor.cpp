@@ -24,8 +24,10 @@ TEST_CASE("Scan size predictor does not interpret geometry statistics as string 
 	REQUIRE(predictor.worst_case_bytes_per_row == ScanSizePredictor::DEFAULT_BYTES_PER_ROW);
 }
 
-TEST_CASE("Scan size predictor still uses maximum string lengths for VARCHAR and BLOB", "[scan_size_predictor]") {
-	for (const auto &type : {LogicalType::VARCHAR, LogicalType::BLOB}) {
+TEST_CASE("Scan size predictor uses maximum string lengths for VARCHAR BLOB and JSON", "[scan_size_predictor]") {
+	const duckdb::vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::BLOB, LogicalType::JSON()};
+	for (const auto &type : types) {
+		REQUIRE(type.InternalType() == PhysicalType::VARCHAR);
 		auto stats = BaseStatistics::CreateEmpty(type);
 		REQUIRE(stats.GetStatsType() == StatisticsType::STRING_STATS);
 		StringStats::SetMaxStringLength(stats, 2048);
