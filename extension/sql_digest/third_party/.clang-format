@@ -1,0 +1,4 @@
+# Keeps the vendored scanner in its upstream style: scripts/format.py runs
+# clang-format with -style=file, which applies this to everything below here.
+DisableFormat: true
+SortIncludes: false

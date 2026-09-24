@@ -1,0 +1,643 @@
+# name: test/sql/function/string/sql_digest.test
+# description: SQL template fingerprints (sql_digest / sql_digest_text)
+# group: [string]
+
+require sql_digest
+
+statement ok
+PRAGMA enable_verification
+
+# ---------------------------------------------------------------------------
+# Digest text: literals, lists, rows (MySQL STATEMENT_DIGEST_TEXT reductions)
+# ---------------------------------------------------------------------------
+
+query T
+SELECT sql_digest_text('SELECT * FROM t1 WHERE a = 1')
+----
+SELECT * FROM `t1` WHERE `a` = ?
+
+query T
+SELECT sql_digest_text('select  *  from t1 where a=99 /* comment */ -- trailing')
+----
+SELECT * FROM `t1` WHERE `a` = ?
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a IN (1)')
+----
+SELECT * FROM `t` WHERE `a` IN (...)
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a IN (1, 2, 3)')
+----
+SELECT * FROM `t` WHERE `a` IN (...)
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a IN (1, b, 3)')
+----
+SELECT * FROM `t` WHERE `a` IN ( ? , `b` , ? )
+
+query T
+SELECT sql_digest_text('INSERT INTO t VALUES (1, 2)')
+----
+INSERT INTO `t` VALUES (...)
+
+query T
+SELECT sql_digest_text('INSERT INTO t VALUES (1, 2), (3, 4), (5, 6)')
+----
+INSERT INTO `t` VALUES (...) /* , ... */
+
+query T
+SELECT sql_digest_text('INSERT INTO t VALUES (1), (2), (3)')
+----
+INSERT INTO `t` VALUES (?) /* , ... */
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE (a, b) IN ((1, 2), (3, 4))')
+----
+SELECT * FROM `t` WHERE ( `a` , `b` ) IN ( (...) /* , ... */ )
+
+query T
+SELECT sql_digest_text('SELECT f(-1, +2) FROM t')
+----
+SELECT `f` (...) FROM `t`
+
+query T
+SELECT sql_digest_text('SELECT 1, 2, 3 FROM t')
+----
+SELECT ... FROM `t`
+
+# ---------------------------------------------------------------------------
+# Unary signs: folded only after an expression-starting token (MySQL m_start_expr)
+# ---------------------------------------------------------------------------
+
+query T
+SELECT sql_digest_text('SELECT -1')
+----
+SELECT ?
+
+query T
+SELECT sql_digest_text('SELECT - - 1')
+----
+SELECT ?
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a - 1 > 0')
+----
+SELECT * FROM `t` WHERE `a` - ? > ?
+
+# '=' is not an expression-starting token in MySQL, so the sign survives
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a = -1')
+----
+SELECT * FROM `t` WHERE `a` = - ?
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a IN (1, -2)')
+----
+SELECT * FROM `t` WHERE `a` IN (...)
+
+# ---------------------------------------------------------------------------
+# NULL: keyword after IS [NOT], literal everywhere else
+# ---------------------------------------------------------------------------
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a IS NULL')
+----
+SELECT * FROM `t` WHERE `a` IS NULL
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a IS NOT NULL')
+----
+SELECT * FROM `t` WHERE `a` IS NOT NULL
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a = NULL')
+----
+SELECT * FROM `t` WHERE `a` = ?
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE a IN (1, NULL, 3)')
+----
+SELECT * FROM `t` WHERE `a` IN (...)
+
+query T
+SELECT sql_digest_text('INSERT INTO t VALUES (1, NULL), (2, NULL)')
+----
+INSERT INTO `t` VALUES (...) /* , ... */
+
+# ---------------------------------------------------------------------------
+# Identifiers keep their case, keywords do not; quoting does not matter
+# ---------------------------------------------------------------------------
+
+query T
+SELECT sql_digest_text('select Abc from T1')
+----
+SELECT `Abc` FROM `T1`
+
+query T
+SELECT sql_digest_text('SELECT `Abc`, `a b`, `a``b` FROM t')
+----
+SELECT `Abc` , `a b` , `a``b` FROM `t`
+
+query I
+SELECT sql_digest('SELECT Abc FROM t') = sql_digest('SELECT `Abc` FROM t')
+----
+true
+
+query I
+SELECT sql_digest('SELECT Abc FROM t') <> sql_digest('SELECT abc FROM t')
+----
+true
+
+query I
+SELECT sql_digest('SELECT a FROM t') = sql_digest('select A_ FROM t') OR sql_digest('SELECT a FROM t') = sql_digest('select a from T')
+----
+false
+
+query I
+SELECT sql_digest('SELECT a FROM t') = sql_digest('select a from t')
+----
+true
+
+# a quoted keyword is an identifier, an unquoted one is not
+query I
+SELECT sql_digest('SELECT `select` FROM t') <> sql_digest('SELECT select FROM t')
+----
+true
+
+# U& without a quote after it: the identifier u, then the operator &
+query T
+SELECT sql_digest_text('SELECT u&x FROM t')
+----
+SELECT `u` & `x` FROM `t`
+
+# ---------------------------------------------------------------------------
+# Other literal kinds
+# ---------------------------------------------------------------------------
+
+query T
+SELECT sql_digest_text('SELECT ''str'', "dq", 1.5, 1e10, 99999999999999999999, TRUE, FALSE, $1, ?, ?1, X''FF'', B''101'' FROM t')
+----
+SELECT ... FROM `t`
+
+# '..' after an integer is a token of its own
+query T
+SELECT sql_digest_text('SELECT a[1..2] FROM t')
+----
+SELECT `a` [ ? .. ? ] FROM `t`
+
+# MySQL hex / bit literals are split into 0 + identifier by the scanner
+query T
+SELECT sql_digest_text('SELECT 0xFF, 0X1a2B, 0b101 FROM t WHERE id = 0x00')
+----
+SELECT ... FROM `t` WHERE `id` = ?
+
+query I
+SELECT sql_digest('SELECT * FROM t WHERE id = 0x1A') = sql_digest('SELECT * FROM t WHERE id = 255')
+----
+true
+
+# 0 followed by a real identifier is not a hex literal
+query T
+SELECT sql_digest_text('SELECT 0 xff FROM t')
+----
+SELECT ? `xff` FROM `t`
+
+# MySQL-style backslash escapes inside string literals. This fork's own string
+# literals (dollar-quoted ones too) process backslash escapes, so each backslash
+# below is doubled for the outer statement. Verification is off: the statement
+# verifier cannot round-trip such literals.
+statement ok
+PRAGMA disable_verification
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE n = ''O\\''Brien'' OR n = ''a\\\\'' OR n = ''it''''s'' OR n = ''tab\\there'' AND c = 1')
+----
+SELECT * FROM `t` WHERE `n` = ? OR `n` = ? OR `n` = ? OR `n` = ? AND `c` = ?
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE n = "O\\"Brien" OR n = "a\\\\" OR n = "it""s" AND c = 1')
+----
+SELECT * FROM `t` WHERE `n` = ? OR `n` = ? OR `n` = ? AND `c` = ?
+
+query I
+SELECT sql_digest('SELECT * FROM t WHERE n = ''O\\''Brien''') = sql_digest('SELECT * FROM t WHERE n = ''x''')
+----
+true
+
+statement ok
+PRAGMA enable_verification
+
+# MySQL '#' line comments; '#' inside a string is data
+query T
+SELECT sql_digest_text(concat('SELECT a FROM t # comment with ''quote', chr(10), 'WHERE s = ''#'' AND b = 1'))
+----
+SELECT `a` FROM `t` WHERE `s` = ? AND `b` = ?
+
+query I
+SELECT sql_digest('SELECT a FROM t # comment') = sql_digest('SELECT a FROM t')
+----
+true
+
+# quotes inside comments and identifiers are not string delimiters
+query T
+SELECT sql_digest_text('SELECT `it''s`, /* don''t */ a -- won''t
+FROM t WHERE b = ''x''')
+----
+SELECT `it's` , `a` FROM `t` WHERE `b` = ?
+
+# dollar-quoted strings are literals; a '$' inside an identifier is not a quote
+query T
+SELECT sql_digest_text('SELECT $$it''s$$, $tag$a''b"c$tag$, a$b FROM t WHERE c = 1')
+----
+SELECT ... , `a$b` FROM `t` WHERE `c` = ?
+
+query T
+SELECT sql_digest_text('SELECT $tag$unterminated')
+----
+SELECT ?
+
+# ---------------------------------------------------------------------------
+# Operators and punctuation are preserved
+# ---------------------------------------------------------------------------
+
+query T
+SELECT sql_digest_text('SELECT a <= 1, a >= 2, a <> 3, a != 4, a::INTEGER, a || b, a AND b FROM t ORDER BY 1 LIMIT 10')
+----
+SELECT `a` <= ? , `a` >= ? , `a` <> ? , `a` != ? , `a` :: INTEGER , `a` || `b` , `a` AND `b` FROM `t` ORDER BY ? LIMIT ?
+
+query I
+SELECT sql_digest('SELECT * FROM t WHERE id = 1') <> sql_digest('SELECT * FROM t WHERE id > 1')
+----
+true
+
+query I
+SELECT sql_digest('SELECT a, bc FROM t') <> sql_digest('SELECT ab, c FROM t')
+----
+true
+
+# ---------------------------------------------------------------------------
+# Semicolons: trailing ones are punctuation, inner ones separate statements
+# ---------------------------------------------------------------------------
+
+query I
+SELECT sql_digest('SELECT 1') = sql_digest('SELECT 2; ; /* trailing */')
+----
+true
+
+# the whole input is one template, however many statements it holds
+query T
+SELECT sql_digest_text('SET autocommit=1; SELECT 1')
+----
+SET `autocommit` = ? ; SELECT ?
+
+query I
+SELECT sql_digest('SELECT 1; SELECT 2') = sql_digest('SELECT 3; SELECT 4')
+----
+true
+
+query I
+SELECT sql_digest('SELECT 1; SELECT 2') <> sql_digest('SELECT 1 SELECT 2')
+----
+true
+
+# ---------------------------------------------------------------------------
+# Digest format and the text/hash invariant
+# ---------------------------------------------------------------------------
+
+query I
+SELECT regexp_full_match(sql_digest('SELECT 1'), '[0-9a-f]{64}')
+----
+true
+
+query I
+SELECT sql_digest('SELECT 1') = sha256(sql_digest_text('SELECT 1'))
+----
+true
+
+# range() table functions do not survive the statement verifier's round trip in this fork
+statement ok
+PRAGMA disable_verification
+
+# sql_digest() hashes with the extension's SHA-256 (SHA-NI when the CPU has it),
+# sha256() with DuckDB's own: compare them on templates of 0 to 301 bytes, every
+# padding boundary included, and on a 79-block one
+query I
+SELECT count(*) FILTER (WHERE sql_digest(q) <> sha256(sql_digest_text(q)))
+FROM (SELECT repeat('a', i) AS q FROM range(0, 300) r(i) UNION ALL SELECT repeat('a', 5000))
+----
+0
+
+query I
+SELECT count(*) FILTER (WHERE sql_digest(q) <> sha256(sql_digest_text(q)))
+FROM (SELECT concat('SELECT c', i % 7, ' FROM t', i % 3, ' WHERE k IN (', i, ', ', i + 1, ') AND s = ''', i, '''') AS q FROM range(2000) r(i))
+----
+0
+
+query II
+SELECT count(*), count(DISTINCT sql_digest(concat('SELECT * FROM users WHERE id = ', i)))
+FROM range(5000) r(i)
+----
+5000	1
+
+query I
+SELECT count(DISTINCT sql_digest(concat('SELECT * FROM users WHERE id IN (', list_aggregate(list_transform(range(1, 1 + i % 50 + 1), x -> x::VARCHAR), 'string_agg', ', '), ')')))
+FROM range(200) r(i)
+----
+1
+
+# ---------------------------------------------------------------------------
+# NULL input
+# ---------------------------------------------------------------------------
+
+query I
+SELECT sql_digest(NULL)
+----
+NULL
+
+query I
+SELECT sql_digest_text(NULL)
+----
+NULL
+
+query I
+SELECT count(DISTINCT sql_digest(q)) FROM (VALUES ('SELECT 1'), (NULL), ('SELECT 2')) v(q)
+----
+1
+
+# ---------------------------------------------------------------------------
+# Damaged input: everything gets a digest, and equal damage digests equally
+# ---------------------------------------------------------------------------
+
+# input with no tokens at all is the empty template
+query I
+SELECT length(sql_digest_text(''))
+----
+0
+
+query I
+SELECT sql_digest('') = sql_digest(' /* comment */ -- only a comment')
+----
+true
+
+# a NUL byte is blanked rather than ending the statement (scanner_init() measures
+# its input with strlen()); one case per kind of text the copy pass skips over
+query T
+SELECT sql_digest_text(concat('SELECT 1', chr(0), ' FROM t'))
+----
+SELECT ? FROM `t`
+
+query T
+SELECT sql_digest_text(concat('SELECT 1 FROM t WHERE n = ''ali', chr(0), 'ce'''))
+----
+SELECT ? FROM `t` WHERE `n` = ?
+
+query T
+SELECT sql_digest_text(concat('SELECT 1 FROM t WHERE n = "ali', chr(0), 'ce"'))
+----
+SELECT ? FROM `t` WHERE `n` = ?
+
+query T
+SELECT sql_digest_text(concat('SELECT `a', chr(0), 'b` FROM t'))
+----
+SELECT `a b` FROM `t`
+
+query T
+SELECT sql_digest_text(concat('SELECT $$a', chr(0), 'b$$ FROM t'))
+----
+SELECT ? FROM `t`
+
+query T
+SELECT sql_digest_text(concat('SELECT 1 /* no', chr(0), 'te */ FROM t'))
+----
+SELECT ? FROM `t`
+
+query T
+SELECT sql_digest_text(concat('SELECT 1 -- no', chr(0), 'te', chr(10), 'FROM t'))
+----
+SELECT ? FROM `t`
+
+query T
+SELECT sql_digest_text(concat('SELECT 1 # no', chr(0), 'te', chr(10), 'FROM t'))
+----
+SELECT ? FROM `t`
+
+# leading, repeated and trailing ones are blanked too
+query T
+SELECT sql_digest_text(concat(chr(0), 'SELECT 1', chr(0), chr(0), ' FROM t', chr(0)))
+----
+SELECT ? FROM `t`
+
+# a blanked NUL is a space, so the digest is the one the statement would have
+# had with a space written in its place
+query I
+SELECT sql_digest(concat('SELECT `a', chr(0), 'b` FROM t')) = sql_digest('SELECT `a b` FROM t')
+----
+true
+
+query I
+SELECT sql_digest(concat('SELECT 1 /* no', chr(0), 'te */ FROM t')) = sql_digest('SELECT 1 /* no te */ FROM t')
+----
+true
+
+# truncation leaves a string, identifier, dollar quote or comment open; each is
+# repaired so the statement digests as far as it got
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE n = ''alice@exa')
+----
+SELECT * FROM `t` WHERE `n` = ?
+
+query T
+SELECT sql_digest_text('SELECT * FROM t WHERE n = "alice@exa')
+----
+SELECT * FROM `t` WHERE `n` = ?
+
+query T
+SELECT sql_digest_text('SELECT `col')
+----
+SELECT `col`
+
+query T
+SELECT sql_digest_text('SELECT 1 FROM t /* trailing note')
+----
+SELECT ? FROM `t`
+
+query T
+SELECT sql_digest_text('SELECT x''FF')
+----
+SELECT ?
+
+# a truncated keyword is just an identifier; there is nothing to repair
+query T
+SELECT sql_digest_text('SELECT a, b FRO')
+----
+SELECT `a` , `b` `FRO`
+
+# the same statement cut at different points inside a literal is one template,
+# and shares it with the statement that was not cut at all
+query I
+SELECT sql_digest('SELECT * FROM t WHERE n = ''alice@exa') = sql_digest('SELECT * FROM t WHERE n = ''bob@e')
+----
+true
+
+query I
+SELECT sql_digest('SELECT * FROM t WHERE n = ''alice@exa') = sql_digest('SELECT * FROM t WHERE n = ''bob@example.com''')
+----
+true
+
+# fixed-length truncation of one template: 500 distinct strings, one digest
+query I
+SELECT count(DISTINCT sql_digest(substr(q, 1, 45)))
+FROM (SELECT concat('SELECT id FROM users WHERE email = ''user', i, '@example.com'' AND ok = 1') AS q FROM range(500) r(i))
+----
+1
+
+# no cut of a real statement fails, at any offset
+query I
+SELECT count(*) FILTER (WHERE length(sql_digest(substr(q, 1, n))) <> 64)
+FROM (SELECT 'UPDATE orders SET note = ''urgent, call back'' WHERE id = 42' AS q) t, range(1, 60) r(n)
+----
+0
+
+# a damaged row does not fail the batch it is in
+query I
+SELECT count(DISTINCT sql_digest(CASE WHEN i = 900 THEN 'SELECT a FROM t WHERE s = ''oops' ELSE 'SELECT 1' END)) FROM range(1000) r(i)
+----
+2
+
+# input the scanner itself rejects is digested up to the point it gave up:
+# an empty delimited identifier, and an invalid Unicode escape
+query T
+SELECT sql_digest_text('SELECT a, `` FROM t')
+----
+SELECT `a` ,
+
+query T
+SELECT sql_digest_text(concat('SELECT a FROM t WHERE x = U&''', chr(92), 'xxxx'''))
+----
+SELECT `a` FROM `t` WHERE `x` =
+
+# ---------------------------------------------------------------------------
+# Long inputs
+# ---------------------------------------------------------------------------
+
+query I
+SELECT sql_digest(concat('SELECT ', chr(39), repeat('x', 100000), chr(39))) = sql_digest('SELECT 1')
+----
+true
+
+query I
+SELECT sql_digest_text(concat('SELECT ', repeat('a', 5000), ' FROM t')) = concat('SELECT `', repeat('a', 5000), '` FROM `t`')
+----
+true
+
+query I
+SELECT sql_digest(concat('SELECT * FROM t WHERE id IN (', list_aggregate(list_transform(range(10000), x -> x::VARCHAR), 'string_agg', ','), ')')) = sql_digest('SELECT * FROM t WHERE id IN (1)')
+----
+true
+
+statement ok
+PRAGMA disable_verification
+
+# multi-threaded execution over a table
+statement ok
+CREATE TABLE audit AS SELECT i AS id, concat('UPDATE accounts SET balance = balance - ', i % 97, ' WHERE account_no = ''AC', i, '''') AS sql_text FROM range(20000) r(i)
+
+query II
+SELECT count(*), count(DISTINCT sql_digest(sql_text)) FROM audit
+----
+20000	1
+
+query I
+SELECT sql_digest_text(sql_text) FROM audit LIMIT 1
+----
+UPDATE `accounts` SET `balance` = `balance` - ? WHERE `account_no` = ?
+
+# ---------------------------------------------------------------------------
+# Random token soup: every input is lexically valid, so the only requirements
+# are "no crash" and the text/hash invariant (backslashes are doubled once for
+# the outer statement)
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE toks AS SELECT * FROM (VALUES
+ ('SELECT'),('select'),('FROM'),('WHERE'),('AND'),('OR'),('NOT'),('IN'),('IS'),('NULL'),('TRUE'),('BETWEEN'),('LIKE'),('CASE'),('WHEN'),('THEN'),('END'),
+ ('INSERT'),('INTO'),('VALUES'),('UPDATE'),('SET'),('DELETE'),('ORDER'),('BY'),('LIMIT'),('GROUP'),('JOIN'),('ON'),('AS'),
+ ('t'),('Abc'),('`q``x`'),('`It''s`'),('col_1'),('_utf8mb4'),('x'),('status'),
+ ('1'),('0'),('-1'),('+2'),('3.14'),('1e5'),('0xFF'),('0b101'),('X''FF'''),('B''01'''),('?'),('$1'),
+ ('''str'''),('''O\\''Brien'''),('"dq"'),('"a\\"b"'),('''it''''s'''),('''tab\\there'''),('''\\\\'''),
+ ('('),(')'),(','),('.'),('='),('<>'),('!='),('<='),('>='),('<'),('>'),('+'),('-'),('*'),('/'),('%'),('||'),('&&'),('::'),('->'),('@'),('@@'),
+ ('/* c */'),(concat('-- c', chr(10))),(concat('# c', chr(10))),('/*+ HINT(1) */')) v(tok)
+
+statement ok
+CREATE TABLE fuzz AS
+WITH tl AS (SELECT list(tok) AS l FROM toks)
+SELECT i, concat('SELECT ', list_aggregate(list_transform(range(1 + (hash(i) % 40)::INT), j -> l[1 + (hash(i * 7919 + j) % array_length(l))::INT]), 'string_agg', ' ')) AS q
+FROM range(5000) r(i), tl
+
+query I
+SELECT count(*) FILTER (WHERE sql_digest(q) <> sha256(sql_digest_text(q))) FROM fuzz
+----
+0
+
+query I
+SELECT count(*) FROM fuzz WHERE length(sql_digest(q)) <> 64
+----
+0
+
+# ---------------------------------------------------------------------------
+# Byte soup: input that is not SQL at all, and every truncation of input that is
+# ---------------------------------------------------------------------------
+
+query I
+SELECT count(*) FILTER (WHERE length(sql_digest(q)) <> 64)
+FROM (SELECT string_agg(chr(35 + (hash(i * 7919 + g) % 90)::INT), '') AS q
+      FROM range(2000) r(i), range(1 + (hash(i) % 40)::INT) g(g) GROUP BY i) t
+----
+0
+
+query I
+SELECT count(*) FILTER (WHERE length(sql_digest(substr(q, 1, n))) <> 64)
+FROM (VALUES
+  ('SELECT id, name FROM users WHERE email = ''alice@example.com'' AND status = 1'),
+  ('UPDATE orders SET note = ''urgent, call back'' WHERE id = 42'),
+  ('INSERT INTO log(msg) VALUES (''payment failed: card declined'')'),
+  ('SELECT /* hint */ a FROM `my table` WHERE b = 0xFF # note'),
+  ('DELETE FROM cart WHERE uid IN (1, 2, 3) AND sku = $tag$x$tag$')
+) v(q), range(1, 90) r(n)
+----
+0
+
+# ---------------------------------------------------------------------------
+# The keyword index agrees with the keyword table
+# ---------------------------------------------------------------------------
+# kwlist_index.hpp is committed, so nothing in the build keeps it in step with
+# kwlist.hpp: every keyword must digest as a bare upper-cased keyword, and a word
+# one character away from one as a back-quoted identifier. duckdb_keywords()
+# lists core's keywords, so this also fails when core has a keyword that the
+# digest's kwlist.hpp lacks. To follow core's list, copy core's kwlist.hpp (with
+# duckdb_libpgquery renamed to duckdb_sql_digest_pgquery) and gram.hpp over those
+# in extension/sql_digest/third_party/libpg_query_digest/include/parser, then
+# regenerate kwlist_index.hpp as generate_keyword_index.cpp describes.
+#
+# Four are not plain keywords: null/true/false digest as literals, and "sql" sits
+# out of order in kwlist.hpp, so neither the index nor the binary search finds it.
+query I
+SELECT count(*) FROM duckdb_keywords()
+WHERE sql_digest_text(keyword_name) <> upper(keyword_name)
+----
+4
+
+query I
+SELECT count(*) FROM duckdb_keywords()
+WHERE sql_digest_text(keyword_name) <> upper(keyword_name)
+  AND keyword_name NOT IN ('null', 'true', 'false', 'sql')
+----
+0
+
+query II
+SELECT count(*) FILTER (WHERE sql_digest_text(concat(keyword_name, 'z')) <> concat('`', keyword_name, 'z`')),
+       count(*) FILTER (WHERE sql_digest_text(concat('z', keyword_name)) <> concat('`z', keyword_name, '`'))
+FROM duckdb_keywords()
+----
+0	0
