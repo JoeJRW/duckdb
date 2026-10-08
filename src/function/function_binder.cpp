@@ -294,9 +294,14 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 		                    children[0]->return_type.id() == LogicalTypeId::STRING_LITERAL)
 		                       ? children[0]->return_type
 		                       : function.arguments[0];
-		if (target_type.AuxInfo()) {
-			auto type_info = target_type.GetAuxInfoShrPtr()->Cast<StringTypeInfo>();
-			if (StringUtil::Lower(type_info.collation).find("nocase") != std::string::npos) {
+		auto aux_info = target_type.AuxInfo();
+		if (aux_info) {
+			// JSON is a VARCHAR alias: its type info is a GENERIC ExtraTypeInfo, not a StringTypeInfo
+			string collation;
+			if (aux_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+				collation = aux_info->Cast<StringTypeInfo>().collation;
+			}
+			if (StringUtil::Lower(collation).find("nocase") != std::string::npos) {
 				target_type = LogicalType::VARCHAR_COLLATION("nocase");
 			} else {
 				target_type = LogicalType::VARCHAR_COLLATION("binary");
