@@ -585,6 +585,14 @@ SELECT count(*) FROM fuzz WHERE length(sql_digest(q)) <> 64
 ----
 0
 
+# The combined function agrees with both existing functions on random token soup.
+query II
+SELECT count(*) FILTER (WHERE d.digest IS DISTINCT FROM sql_digest(q)),
+       count(*) FILTER (WHERE d.digest_text IS DISTINCT FROM sql_digest_text(q))
+FROM (SELECT q, sql_digest_with_text(q) AS d FROM fuzz)
+----
+0	0
+
 # ---------------------------------------------------------------------------
 # Byte soup: input that is not SQL at all, and every truncation of input that is
 # ---------------------------------------------------------------------------

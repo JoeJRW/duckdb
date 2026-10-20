@@ -27,6 +27,7 @@ void RegisterDigestFunction(ExtensionLoader &loader) {
 static void LoadInternal(ExtensionLoader &loader) {
 	RegisterDigestFunction<SQLDigestFun>(loader);
 	RegisterDigestFunction<SQLDigestTextFun>(loader);
+	RegisterDigestFunction<SQLDigestWithTextFun>(loader);
 }
 
 void SqlDigestExtension::Load(ExtensionLoader &loader) {

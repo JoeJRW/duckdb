@@ -1,0 +1,184 @@
+# name: test/sql/function/string/sql_digest_with_text.test
+# description: SQL digest and template returned together as a struct
+# group: [string]
+
+require sql_digest
+
+statement ok
+PRAGMA enable_verification
+
+query T
+SELECT typeof(sql_digest_with_text('SELECT 1'))
+----
+STRUCT(digest VARCHAR, digest_text VARCHAR)
+
+# A single function call can be expanded into two named columns.
+query IT
+SELECT digest = sql_digest('SELECT 1'), digest_text
+FROM (SELECT unnest(sql_digest_with_text('SELECT 1')))
+----
+true	SELECT ?
+
+# Extracting a single field is also supported.
+query II
+SELECT (sql_digest_with_text('SELECT 1')).digest = sql_digest('SELECT 1'),
+       (sql_digest_with_text('SELECT 1')).digest_text = sql_digest_text('SELECT 1')
+----
+true	true
+
+query I
+SELECT sql_digest_with_text(NULL) IS NULL
+----
+true
+
+query TT
+SELECT unnest(sql_digest_with_text(NULL::VARCHAR))
+----
+NULL	NULL
+
+# Empty input produces a non-NULL struct containing the hash of an empty template.
+query III
+SELECT d IS NOT NULL, d.digest = sha256(''), length(d.digest_text)
+FROM (SELECT sql_digest_with_text('') AS d)
+----
+true	true	0
+
+query ITT
+SELECT id, d.* FROM (
+    SELECT id, sql_digest_with_text(sql_text) AS d
+    FROM (VALUES (1, 'SELECT 1'), (2, NULL), (3, 'SELECT 2')) v(id, sql_text)
+) t ORDER BY id
+----
+1	<REGEX>:[0-9a-f]{64}	SELECT ?
+2	NULL	NULL
+3	<REGEX>:[0-9a-f]{64}	SELECT ?
+
+statement ok
+PRAGMA disable_verification
+
+# The statement verifier in this fork cannot round-trip range() table functions.
+# Compare all fields, including NULLs, after materializing results across batches.
+# Different long identifiers expose references to the normalizer's reused buffer.
+statement ok
+CREATE TABLE digest_inputs AS
+SELECT i AS id,
+       CASE WHEN i % 17 = 0 THEN NULL
+            WHEN i % 17 = 1 THEN ''
+            WHEN i % 17 = 2 THEN '/* only a comment */'
+            WHEN i % 17 = 3 THEN 'SELECT a, `` FROM t'
+            WHEN i % 17 = 4 THEN 'SELECT ''unterminated'
+            WHEN i % 17 = 5 THEN concat('SELECT 1', chr(0), ' FROM t')
+            WHEN i % 17 = 6 THEN concat('SELECT U&''', chr(92), 'xxxx''')
+            WHEN i % 17 = 7 THEN concat('SELECT ', repeat('a', 1000), i, ' FROM t')
+            ELSE concat('SELECT col_', i, ' FROM t WHERE id IN (', i, ', ', i + 1, ')')
+       END AS sql_text
+FROM range(12000) r(i)
+
+statement ok
+CREATE TABLE digest_outputs AS
+SELECT id, sql_text, sql_digest_with_text(sql_text) AS d FROM digest_inputs
+
+query III
+SELECT count(*),
+       count(*) FILTER (WHERE d.digest IS DISTINCT FROM sql_digest(sql_text)),
+       count(*) FILTER (WHERE d.digest_text IS DISTINCT FROM sql_digest_text(sql_text))
+FROM digest_outputs
+----
+12000	0	0
+
+query II
+SELECT count(*) FILTER (WHERE d.digest IS DISTINCT FROM sha256(d.digest_text)),
+       count(*) FILTER (WHERE d IS NOT NULL AND NOT regexp_full_match(d.digest, '[0-9a-f]{64}'))
+FROM digest_outputs
+----
+0	0
+
+# Selected/dictionary inputs, including repeated and NULL strings.
+statement ok
+SET debug_verify_vector='dictionary_expression'
+
+query II
+SELECT count(*) FILTER (WHERE d.digest IS DISTINCT FROM sql_digest(sql_text)),
+       count(*) FILTER (WHERE d.digest_text IS DISTINCT FROM sql_digest_text(sql_text))
+FROM (SELECT sql_text, sql_digest_with_text(sql_text) AS d FROM digest_inputs WHERE id % 3 = 0)
+----
+0	0
+
+statement ok
+SET debug_verify_vector='none'
+
+# test_vector_types supplies constant, flat and dictionary VARCHAR vectors.
+query II
+SELECT count(*) FILTER (WHERE d.digest IS DISTINCT FROM sql_digest(sql_text)),
+       count(*) FILTER (WHERE d.digest_text IS DISTINCT FROM sql_digest_text(sql_text))
+FROM (SELECT sql_text, sql_digest_with_text(sql_text) AS d FROM test_vector_types(''::VARCHAR) t(sql_text))
+----
+0	0
+
+# Exercise the runtime constant path without constant folding.
+statement ok
+PRAGMA disable_optimizer
+
+query III
+SELECT count(*), count(d.digest), count(d.digest_text)
+FROM (SELECT sql_digest_with_text(NULL::VARCHAR) AS d FROM range(5000))
+----
+5000	0	0
+
+query III
+SELECT count(*), count(*) FILTER (WHERE d.digest = sha256('SELECT ?')),
+       count(*) FILTER (WHERE d.digest_text = 'SELECT ?')
+FROM (SELECT sql_digest_with_text('SELECT 42') AS d FROM range(5000))
+----
+5000	5000	5000
+
+statement ok
+PRAGMA enable_optimizer
+
+# Direct struct expansion shares one function evaluation in the default plan.
+query TT
+EXPLAIN SELECT unnest(sql_digest_with_text(sql_text)) FROM (VALUES ('SELECT 1'), (NULL)) t(sql_text)
+----
+physical_plan	<REGEX>:.*PROJECTION.*PROJECTION.*sql_digest_with_text.*COLUMN_DATA_SCAN.*
+
+# The subquery form also works without common subexpression elimination.
+statement ok
+SET disabled_optimizers='common_subexpressions'
+
+query II
+SELECT count(*) FILTER (WHERE d.digest IS DISTINCT FROM sql_digest(sql_text)),
+       count(*) FILTER (WHERE d.digest_text IS DISTINCT FROM sql_digest_text(sql_text))
+FROM (SELECT sql_text, sql_digest_with_text(sql_text) AS d FROM digest_inputs)
+----
+0	0
+
+statement ok
+SET disabled_optimizers=''
+
+# Each worker gets its own normalizer and reused buffers.
+statement ok
+SET threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+query II
+SELECT count(*) FILTER (WHERE d.digest IS DISTINCT FROM sql_digest(sql_text)),
+       count(*) FILTER (WHERE d.digest_text IS DISTINCT FROM sql_digest_text(sql_text))
+FROM (SELECT sql_text, sql_digest_with_text(sql_text) AS d FROM digest_inputs)
+----
+0	0
+
+# TRY and field extraction retain the existing best-effort normalization behavior.
+query II
+SELECT count(*) FILTER (WHERE d.digest IS DISTINCT FROM sql_digest(sql_text)),
+       count(*) FILTER (WHERE d.digest_text IS DISTINCT FROM sql_digest_text(sql_text))
+FROM (SELECT sql_text, TRY(sql_digest_with_text(sql_text)) AS d FROM digest_inputs)
+----
+0	0
+
+# Empty input relations do not produce an output row.
+query I
+SELECT count(*) FROM (SELECT unnest(sql_digest_with_text(sql_text)) FROM digest_inputs WHERE id < 0)
+----
+0

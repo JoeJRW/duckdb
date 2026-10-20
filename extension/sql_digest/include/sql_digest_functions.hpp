@@ -36,4 +36,16 @@ struct SQLDigestTextFun {
 	static ScalarFunction GetFunction();
 };
 
+struct SQLDigestWithTextFun {
+	static constexpr const char *Name = "sql_digest_with_text";
+	static constexpr const char *Parameter = "sql";
+	static constexpr const char *Description =
+	    "Returns a struct containing digest (the SHA-256 hex digest) and digest_text (the normalized SQL template), "
+	    "normalizing `sql` once to produce both fields. Use unnest() to expand the result into two columns.";
+	static constexpr const char *Example = "unnest(sql_digest_with_text('SELECT * FROM users WHERE id = 123'))";
+	static constexpr const char *Category = "string";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb
